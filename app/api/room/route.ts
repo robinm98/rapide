@@ -1,7 +1,74 @@
+import Anthropic from '@anthropic-ai/sdk';
 import { NextResponse } from 'next/server';
 import { supabaseAdmin } from '@/lib/supabase-admin';
 
 export const runtime = 'nodejs';
+
+const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
+
+function buildPrompt(game: string, category: string, previousQuestions: string[]) {
+  const avoid = previousQuestions.length
+    ? `\n\nAVOID these already-asked topics: ${previousQuestions.slice(-15).join('; ')}`
+    : '';
+
+  if (game === 'trivia') {
+    return `Generate ONE medium-difficulty trivia question in the category "${category}".
+Respond ONLY with valid JSON, no markdown, no preamble:
+{
+  "question": "the question text",
+  "choices": ["A", "B", "C", "D"],
+  "correctIndex": 0,
+  "explanation": "1-2 sentence fun fact"
+}
+Make it interesting, not obvious. Mix in pop culture, history, science, geography, arts.${avoid}`;
+  }
+  if (game === 'wall') {
+    return `Create ONE "wall" challenge. The user sees 12 items in a 3x4 grid. 8 match a criterion, 4 don't. Theme: "${category}".
+Respond ONLY with valid JSON, no markdown:
+{
+  "question": "Pick the 8 items that [criterion]. Avoid the 4 that don't.",
+  "criterion": "short restatement of what makes an item correct",
+  "items": [
+    {"label":"item 1","correct":true},
+    {"label":"item 2","correct":false}
+  ],
+  "explanation": "1-2 sentence explanation of why the 4 wrong ones are wrong"
+}
+Exactly 12 items, exactly 8 true and 4 false. Examples: "Mountains above 8000m" with 8 real 8000ers + 4 that are 7500-7999m; "Movies directed by Christopher Nolan" with 8 real + 4 not by him. Be creative but factual.${avoid}`;
+  }
+  return `Create ONE "closest guess" question. Players answer with a number and the closest wins. Topic: "${category}".
+Respond ONLY with valid JSON, no markdown:
+{
+  "question": "the question — must have a precise numeric answer",
+  "answer": 1234.5,
+  "unit": "km, year, %, people, etc.",
+  "explanation": "1-2 sentence context about the answer"
+}
+Good examples: "In what year did the Titanic sink?" (1912), "How tall is Mount Everest in meters?" (8849). Make the answer verifiable and specific.${avoid}`;
+}
+
+async function generateQuestion(game: string, category: string, previousQuestions: string[]) {
+  const prompt = buildPrompt(game, category, previousQuestions);
+  const msg = await anthropic.messages.create({
+    model: 'claude-sonnet-4-5',
+    max_tokens: 1500,
+    messages: [{ role: 'user', content: prompt }],
+  });
+  const text = msg.content
+    .filter((b: any) => b.type === 'text')
+    .map((b: any) => b.text)
+    .join('\n')
+    .replace(/```json|```/g, '')
+    .trim();
+  const data = JSON.parse(text);
+  if (game === 'wall' && Array.isArray(data.items)) {
+    data.items = data.items
+      .map((v: any) => ({ v, k: Math.random() }))
+      .sort((a: any, b: any) => a.k - b.k)
+      .map((o: any) => o.v);
+  }
+  return data;
+}
 
 function genCode() {
   const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
@@ -66,18 +133,7 @@ export async function POST(req: Request) {
       if (!room) return NextResponse.json({ error: 'Room not found' }, { status: 404 });
       if (room.host_id !== playerId) return NextResponse.json({ error: 'Only host can start' }, { status: 403 });
 
-      // Ask the question API for the first question
-      const qRes = await fetch(`${process.env.NEXT_PUBLIC_BASE_URL || ''}/api/question`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          game: room.config.game,
-          category: room.config.category,
-          previousQuestions: [],
-        }),
-      });
-      const question = await qRes.json();
-      if (question.error) throw new Error(question.error);
+      const question = await generateQuestion(room.config.game, room.config.category, []);
 
       const state = {
         phase: 'answering',
@@ -163,17 +219,7 @@ export async function POST(req: Request) {
         return NextResponse.json({ ok: true, finished: true });
       }
 
-      const qRes = await fetch(`${process.env.NEXT_PUBLIC_BASE_URL || ''}/api/question`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          game: config.game,
-          category: config.category,
-          previousQuestions: state.pastQuestions,
-        }),
-      });
-      const question = await qRes.json();
-      if (question.error) throw new Error(question.error);
+      const question = await generateQuestion(config.game, config.category, state.pastQuestions);
 
       const newState = {
         phase: 'answering',
