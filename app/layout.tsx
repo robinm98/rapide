@@ -1,8 +1,22 @@
+import type { Viewport } from 'next';
 import './globals.css';
 
 export const metadata = {
   title: 'Salon. — A Parlor Game',
   description: 'An evening of curious questions, answered together.',
+  appleWebApp: {
+    capable: true,
+    statusBarStyle: 'default' as const,
+    title: 'Salon',
+  },
+};
+
+export const viewport: Viewport = {
+  width: 'device-width',
+  initialScale: 1,
+  maximumScale: 1,
+  viewportFit: 'cover',
+  themeColor: '#F5F2EC',
 };
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {

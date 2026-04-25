@@ -9,7 +9,7 @@ type Player = { id: string; name: string; score: number; isHost?: boolean };
 type Room = {
   code: string;
   host_id: string;
-  config: { game: string; category: string; rounds: number };
+  config: { game: string; categories: string[]; rounds: number };
   state: any;
   players: Player[];
 };
@@ -24,6 +24,14 @@ export default function RoomPage({ params }: { params: { code: string } }) {
   const [myWallPicks, setMyWallPicks] = useState<number[]>([]);
   const [closestInput, setClosestInput] = useState('');
   const [submitting, setSubmitting] = useState(false);
+  const [isMobile, setIsMobile] = useState(false);
+
+  useEffect(() => {
+    const update = () => setIsMobile(window.innerWidth < 768);
+    update();
+    window.addEventListener('resize', update);
+    return () => window.removeEventListener('resize', update);
+  }, []);
 
   useEffect(() => {
     const pid = sessionStorage.getItem(`salon_player_${code}`);
@@ -44,7 +52,6 @@ export default function RoomPage({ params }: { params: { code: string } }) {
         { event: 'UPDATE', schema: 'public', table: 'rooms', filter: `code=eq.${code}` },
         payload => {
           setRoom(payload.new as Room);
-          // Clear local state on phase changes
           if ((payload.new as any).state?.phase === 'answering') {
             setMyWallPicks([]);
             setClosestInput('');
@@ -72,7 +79,7 @@ export default function RoomPage({ params }: { params: { code: string } }) {
   if (loading) {
     return (
       <Shell>
-        <main style={{ padding: '120px 32px', textAlign: 'center' }}>
+        <main style={{ padding: '120px clamp(16px, 4vw, 32px)', textAlign: 'center' }}>
           <div style={{ fontFamily: fontStack.mono, fontSize: 12, color: T.inkMute, animation: 'pulse 1.5s ease-in-out infinite' }}>LOADING ROOM…</div>
         </main>
       </Shell>
@@ -82,7 +89,7 @@ export default function RoomPage({ params }: { params: { code: string } }) {
   if (error || !room) {
     return (
       <Shell>
-        <main style={{ padding: '120px 32px', textAlign: 'center' }}>
+        <main style={{ padding: '120px clamp(16px, 4vw, 32px)', textAlign: 'center' }}>
           <Tag color={T.wrong}>Error</Tag>
           <div style={{ fontFamily: fontStack.display, fontSize: 32, margin: '16px 0 24px' }}>{error || 'Something went wrong'}</div>
           <Btn onClick={() => router.push('/')}>Back home</Btn>
@@ -97,9 +104,12 @@ export default function RoomPage({ params }: { params: { code: string } }) {
 
   // ================= LOBBY =================
   if (state.phase === 'lobby') {
+    const catLabel = config.categories.length <= 3
+      ? config.categories.map((c: string) => c.toUpperCase()).join(', ')
+      : `${config.categories.length} CATEGORIES`;
     return (
       <Shell>
-        <main style={{ maxWidth: 900, margin: '0 auto', padding: '48px 32px' }}>
+        <main style={{ maxWidth: 900, margin: '0 auto', padding: '48px clamp(16px, 4vw, 32px)' }}>
           <Tag color={T.accent}>Waiting for players…</Tag>
           <h1 style={{ fontFamily: fontStack.display, fontSize: 'clamp(60px, 12vw, 140px)', fontWeight: 500, margin: '16px 0 8px', letterSpacing: '0.2em', textAlign: 'center' }}>
             {code}
@@ -126,7 +136,7 @@ export default function RoomPage({ params }: { params: { code: string } }) {
           </div>
 
           <div style={{ marginTop: 32, fontFamily: fontStack.mono, fontSize: 11, color: T.inkMute, textAlign: 'center' }}>
-            {config.game.toUpperCase()} · {config.category.toUpperCase()} · {config.rounds} ROUNDS
+            {config.game.toUpperCase()} · {catLabel} · {config.rounds} ROUNDS
           </div>
 
           <div style={{ marginTop: 40, textAlign: 'center' }}>
@@ -151,7 +161,7 @@ export default function RoomPage({ params }: { params: { code: string } }) {
     const winner = ranked[0];
     return (
       <Shell>
-        <main style={{ maxWidth: 900, margin: '0 auto', padding: '80px 32px', textAlign: 'center' }}>
+        <main style={{ maxWidth: 900, margin: '0 auto', padding: '80px clamp(16px, 4vw, 32px)', textAlign: 'center' }}>
           <Tag color={T.accent}>Final Standings</Tag>
           <h1 style={{ fontFamily: fontStack.display, fontSize: 'clamp(48px, 8vw, 88px)', fontWeight: 400, margin: '24px 0 8px', letterSpacing: '-0.03em', lineHeight: 1 }}>
             <em style={{ fontWeight: 300 }}>{winner.name}</em>
@@ -195,7 +205,7 @@ export default function RoomPage({ params }: { params: { code: string } }) {
 
   return (
     <Shell>
-      <main style={{ maxWidth: 1100, margin: '0 auto', padding: '32px' }}>
+      <main style={{ maxWidth: 1100, margin: '0 auto', padding: 'clamp(16px, 4vw, 32px)' }}>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 32, paddingBottom: 20, borderBottom: `1px solid ${T.lineFade}`, flexWrap: 'wrap', gap: 12 }}>
           <div style={{ fontFamily: fontStack.mono, fontSize: 11, color: T.inkMute, letterSpacing: '0.15em', textTransform: 'uppercase' }}>
             Round {state.round} / {config.rounds} · {config.game === 'trivia' ? 'Trivia' : config.game === 'wall' ? 'The Wall' : 'The Closest'}
@@ -214,7 +224,7 @@ export default function RoomPage({ params }: { params: { code: string } }) {
               fontFamily: fontStack.mono, fontSize: 12, display: 'flex', gap: 12, alignItems: 'baseline',
             }}>
               <span>{p.name}{state.answers[p.id] !== undefined ? ' ✓' : ''}</span>
-              <span style={{ fontFamily: fontStack.display, fontSize: 18, fontWeight: 600, color: p.id === playerId ? T.accent : T.accent }}>
+              <span style={{ fontFamily: fontStack.display, fontSize: 18, fontWeight: 600, color: T.accent }}>
                 {p.score}
               </span>
             </div>
@@ -222,6 +232,22 @@ export default function RoomPage({ params }: { params: { code: string } }) {
         </div>
 
         <div className="fade-up" style={{ marginBottom: 40 }}>
+          {q.imageUrl && (
+            <img
+              src={q.imageUrl}
+              alt=""
+              style={{
+                display: 'block',
+                marginBottom: 20,
+                maxWidth: isMobile ? '100%' : 480,
+                maxHeight: isMobile ? 240 : 320,
+                width: isMobile ? '100%' : 'auto',
+                height: 'auto',
+                objectFit: 'contain',
+                border: `1.5px solid ${T.ink}`,
+              }}
+            />
+          )}
           <h2 style={{ fontFamily: fontStack.display, fontSize: 'clamp(28px, 4vw, 42px)', fontWeight: 400, lineHeight: 1.2, letterSpacing: '-0.01em', margin: 0 }}>
             {q.question}
           </h2>
@@ -256,6 +282,7 @@ export default function RoomPage({ params }: { params: { code: string } }) {
                   padding: '24px 20px', textAlign: 'left', cursor: canClick ? 'pointer' : 'default',
                   background: bg, color, border: `1.5px solid ${border}`,
                   fontFamily: fontStack.body, fontSize: 17, lineHeight: 1.3,
+                  minHeight: isMobile ? 80 : undefined,
                   display: 'flex', gap: 16, alignItems: 'flex-start',
                 }}>
                   <span style={{ fontFamily: fontStack.mono, fontSize: 11, letterSpacing: '0.1em', opacity: 0.6, marginTop: 4, minWidth: 20 }}>
@@ -284,7 +311,7 @@ export default function RoomPage({ params }: { params: { code: string } }) {
                 Selected {myWallPicks.length} / 8
               </div>
             )}
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 8 }}>
+            <div style={{ display: 'grid', gridTemplateColumns: `repeat(${isMobile ? 2 : 4}, 1fr)`, gap: 8 }}>
               {q.items.map((item: any, idx: number) => {
                 const picked = myWallPicks.includes(idx);
                 let bg = T.bg, color = T.ink, border = T.ink;
@@ -301,7 +328,7 @@ export default function RoomPage({ params }: { params: { code: string } }) {
                   }} style={{
                     aspectRatio: '1.3', padding: 16, cursor: canClick ? 'pointer' : 'default',
                     background: bg, color, border: `1.5px solid ${border}`,
-                    fontFamily: fontStack.body, fontSize: 14, lineHeight: 1.2,
+                    fontFamily: fontStack.body, fontSize: isMobile ? 13 : 14, lineHeight: 1.2,
                     display: 'flex', flexDirection: 'column', justifyContent: 'space-between', textAlign: 'left',
                   }}>
                     <span style={{ fontFamily: fontStack.mono, fontSize: 10, opacity: 0.5 }}>
@@ -331,7 +358,8 @@ export default function RoomPage({ params }: { params: { code: string } }) {
             {state.phase === 'answering' && !iAnswered && (
               <div style={{ display: 'flex', gap: 12 }}>
                 <input
-                  type="number"
+                  type="text"
+                  inputMode="decimal"
                   value={closestInput}
                   onChange={e => setClosestInput(e.target.value)}
                   placeholder="Your guess…"
