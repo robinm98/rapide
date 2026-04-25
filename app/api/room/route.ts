@@ -7,8 +7,28 @@ export const runtime = 'nodejs';
 
 const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
 
-function pickCategory(categories: string[]): string {
-  return categories[Math.floor(Math.random() * categories.length)];
+function pickOne<T>(arr: T[]): T {
+  return arr[Math.floor(Math.random() * arr.length)];
+}
+
+function buildTriviaFallbackPrompt(category: string, previousQuestions: string[]) {
+  const avoid = previousQuestions.length
+    ? `\n\nStrictly AVOID repeating these already-asked topics: ${previousQuestions.slice(-15).join('; ')}`
+    : '';
+  return `Generate ONE text-only trivia question from the broad category "${category}".
+- Vary the difficulty randomly (easy / medium / hard)
+- Be culturally diverse — not US-centric
+- This must be a text-only question: set "imageFirst": false and "wikiQuery": null.
+
+Respond ONLY with valid JSON, no markdown, no preamble:
+{
+  "imageFirst": false,
+  "question": "string",
+  "choices": ["A", "B", "C", "D"],
+  "correctIndex": 0,
+  "explanation": "1-2 sentence fun fact",
+  "wikiQuery": null
+}${avoid}`;
 }
 
 function buildPrompt(game: string, category: string, previousQuestions: string[]) {
@@ -20,17 +40,31 @@ function buildPrompt(game: string, category: string, previousQuestions: string[]
     return `Generate ONE trivia question from the broad category "${category}".
 - Vary the difficulty randomly (easy / medium / hard)
 - Be culturally diverse — not US-centric
-- If a Wikipedia image would obviously help (flags, landmarks, paintings, famous animals, famous dishes, etc.), set "wikiQuery" to the exact Wikipedia article title. Otherwise set "wikiQuery": null.
-- The question must stand on its own even if the image doesn't load.
+
+IMAGE-FIRST RULE (use ~30% of the time):
+When the answer is something visually iconic — a famous person, landmark, painting, flag, animal, dish, building, logo, album cover — generate an IMAGE-FIRST question where the image carries all the information.
+For image-first questions:
+  • Set "imageFirst": true
+  • The question text MUST be one of these forms (or closely similar): "Who is this?", "Where is this?", "What is this?", "Which [country/painting/animal/dish] is this?", "Whose work is this?", "What is this landmark called?", "In which country is this located?"
+  • The question text MUST NOT name, describe, hint at, or paraphrase the subject — the image carries that
+  • Set "wikiQuery" to the EXACT Wikipedia article title of the subject shown (e.g. "Mona Lisa", "Mount Fuji", "Frida Kahlo", "Margherita pizza")
+  • The four choices are the candidate answers
+
+TEXT-ONLY RULE (use ~70% of the time):
+  • Set "imageFirst": false
+  • Set "wikiQuery": null
+  • Write a complete self-contained text question as normal
 
 Respond ONLY with valid JSON, no markdown, no preamble:
 {
-  "question": "string",
+  "imageFirst": true,
+  "question": "Who is this?",
   "choices": ["A", "B", "C", "D"],
   "correctIndex": 0,
   "explanation": "1-2 sentence fun fact",
-  "wikiQuery": "exact Wikipedia article title, or null"
-}${avoid}`;
+  "wikiQuery": "exact Wikipedia article title"
+}
+(or "imageFirst": false, "wikiQuery": null for text questions)${avoid}`;
   }
 
   if (game === 'wall') {
@@ -56,24 +90,17 @@ Respond ONLY with valid JSON, no markdown:
   return `Create ONE "closest guess" question from the broad category "${category}".
 - The answer must be a precise, verifiable number
 - Vary the type: years, distances, populations, percentages, prices, durations, weights, counts
-- If a Wikipedia image would obviously help (a landmark, animal, dish, famous person, etc.), set "wikiQuery" to the exact Wikipedia article title. Otherwise set "wikiQuery": null.
 
 Respond ONLY with valid JSON, no markdown:
 {
   "question": "string",
   "answer": 1234.5,
   "unit": "km / year / % / people / etc.",
-  "explanation": "1-2 sentence context about the answer",
-  "wikiQuery": "exact Wikipedia article title, or null"
+  "explanation": "1-2 sentence context about the answer"
 }${avoid}`;
 }
 
-async function generateQuestion(
-  game: 'trivia' | 'wall' | 'closest',
-  category: string,
-  previousQuestions: string[]
-): Promise<any> {
-  const prompt = buildPrompt(game, category, previousQuestions);
+async function callClaude(prompt: string): Promise<any> {
   const msg = await anthropic.messages.create({
     model: 'claude-sonnet-4-5',
     max_tokens: 1500,
@@ -85,17 +112,37 @@ async function generateQuestion(
     .join('\n')
     .replace(/```json|```/g, '')
     .trim();
-  const data = JSON.parse(text);
+  return JSON.parse(text);
+}
+
+async function generateQuestion(
+  game: 'trivia' | 'wall' | 'closest',
+  category: string,
+  previousQuestions: string[]
+): Promise<any> {
+  const data = await callClaude(buildPrompt(game, category, previousQuestions));
+
   if (game === 'wall' && Array.isArray(data.items)) {
     data.items = data.items
       .map((v: any) => ({ v, k: Math.random() }))
       .sort((a: any, b: any) => a.k - b.k)
       .map((o: any) => o.v);
   }
-  if (data.wikiQuery) {
+
+  if (game === 'trivia' && data.imageFirst && data.wikiQuery) {
     const imageUrl = await fetchWikiImage(data.wikiQuery);
-    if (imageUrl) data.imageUrl = imageUrl;
+    if (imageUrl) {
+      data.imageUrl = imageUrl;
+    } else {
+      // Wiki fetch failed — regenerate as text-only
+      try {
+        return await callClaude(buildTriviaFallbackPrompt(category, previousQuestions));
+      } catch {
+        // Regeneration also failed — play original question without image
+      }
+    }
   }
+
   return data;
 }
 
@@ -127,6 +174,7 @@ export async function POST(req: Request) {
         state: {
           phase: 'lobby',
           round: 0,
+          currentGame: null,
           question: null,
           answers: {},
           wallPicks: {},
@@ -161,12 +209,14 @@ export async function POST(req: Request) {
       if (!room) return NextResponse.json({ error: 'Room not found' }, { status: 404 });
       if (room.host_id !== playerId) return NextResponse.json({ error: 'Only host can start' }, { status: 403 });
 
-      const category = pickCategory(room.config.categories);
-      const question = await generateQuestion(room.config.game, category, []);
+      const game = pickOne<string>(room.config.games);
+      const category = pickOne<string>(room.config.categories);
+      const question = await generateQuestion(game as any, category, []);
 
       const state = {
         phase: 'answering',
         round: 1,
+        currentGame: game,
         question,
         answers: {},
         wallPicks: {},
@@ -201,22 +251,23 @@ export async function POST(req: Request) {
       if (!room) return NextResponse.json({ error: 'Room not found' }, { status: 404 });
       if (room.host_id !== playerId) return NextResponse.json({ error: 'Only host can reveal' }, { status: 403 });
 
-      const { config, state, players } = room;
+      const { state, players } = room;
       const q = state.question;
+      const currentGame = state.currentGame;
       let newPlayers = [...players];
 
-      if (config.game === 'trivia') {
+      if (currentGame === 'trivia') {
         newPlayers = players.map((p: any) => {
           const a = state.answers[p.id];
           return a === q.correctIndex ? { ...p, score: p.score + 1 } : p;
         });
-      } else if (config.game === 'wall') {
+      } else if (currentGame === 'wall') {
         newPlayers = players.map((p: any) => {
           const picks = state.wallPicks[p.id] || [];
           const correct = picks.filter((i: number) => q.items[i]?.correct).length;
           return { ...p, score: p.score + correct };
         });
-      } else if (config.game === 'closest') {
+      } else if (currentGame === 'closest') {
         let bestId = null, bestDiff = Infinity;
         players.forEach((p: any) => {
           const g = state.answers[p.id];
@@ -248,12 +299,14 @@ export async function POST(req: Request) {
         return NextResponse.json({ ok: true, finished: true });
       }
 
-      const category = pickCategory(config.categories);
-      const question = await generateQuestion(config.game, category, state.pastQuestions);
+      const game = pickOne<string>(config.games);
+      const category = pickOne<string>(config.categories);
+      const question = await generateQuestion(game as any, category, state.pastQuestions);
 
       const newState = {
         phase: 'answering',
         round: state.round + 1,
+        currentGame: game,
         question,
         answers: {},
         wallPicks: {},

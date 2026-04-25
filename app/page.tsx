@@ -25,16 +25,32 @@ const CATEGORIES = [
   'Politics',
 ];
 
+const GAMES = [
+  { key: 'trivia', title: 'Trivia', desc: 'Classic multiple-choice. Four options, one right.' },
+  { key: 'wall', title: 'The Wall', desc: '12 items. Pick the 8 that belong.' },
+  { key: 'closest', title: 'The Closest', desc: 'Answer with a number. Nearest wins.' },
+];
+
 export default function Home() {
   const router = useRouter();
   const [view, setView] = useState<'home' | 'create' | 'join'>('home');
   const [name, setName] = useState('');
   const [code, setCode] = useState('');
-  const [game, setGame] = useState('trivia');
+  const [games, setGames] = useState<string[]>(['trivia']);
   const [categories, setCategories] = useState<string[]>(['General']);
   const [rounds, setRounds] = useState(5);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
+
+  const toggleGame = (key: string) => {
+    setGames(prev =>
+      prev.includes(key)
+        ? prev.length > 1 ? prev.filter(g => g !== key) : prev
+        : [...prev, key]
+    );
+  };
+
+  const allGamesSelected = games.length === GAMES.length;
 
   const toggleCategory = (cat: string) => {
     setCategories(prev =>
@@ -44,7 +60,7 @@ export default function Home() {
     );
   };
 
-  const allSelected = categories.length === CATEGORIES.length;
+  const allCategoriesSelected = categories.length === CATEGORIES.length;
 
   const createRoom = async () => {
     if (!name.trim()) { setError('Enter your name'); return; }
@@ -56,7 +72,7 @@ export default function Home() {
         body: JSON.stringify({
           action: 'create',
           hostName: name.trim(),
-          config: { game, categories, rounds },
+          config: { games, categories, rounds },
         }),
       });
       const data = await res.json();
@@ -189,23 +205,35 @@ export default function Home() {
         </section>
 
         <section style={{ marginBottom: 40 }}>
-          <div style={{ fontFamily: fontStack.mono, fontSize: 11, letterSpacing: '0.15em', textTransform: 'uppercase', color: T.inkMute, marginBottom: 16 }}>§ 02 — Choose a game</div>
+          <div style={{
+            fontFamily: fontStack.mono, fontSize: 11, letterSpacing: '0.15em',
+            textTransform: 'uppercase', color: T.inkMute, marginBottom: 16,
+            display: 'flex', justifyContent: 'space-between', alignItems: 'center',
+          }}>
+            <span>§ 02 — Game mode ({games.length} selected)</span>
+            <button onClick={() => setGames(allGamesSelected ? ['trivia'] : GAMES.map(g => g.key))} style={{
+              background: 'none', border: 'none', cursor: 'pointer', color: T.inkMute,
+              fontFamily: fontStack.mono, fontSize: 11, letterSpacing: '0.15em',
+              textTransform: 'uppercase', padding: 0,
+            }}>
+              {allGamesSelected ? 'Clear' : 'Select All'}
+            </button>
+          </div>
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))', gap: 12 }}>
-            {[
-              { key: 'trivia', title: 'Trivia', desc: 'Classic multiple-choice. Four options, one right.' },
-              { key: 'wall', title: 'The Wall', desc: '12 items. Pick the 8 that belong.' },
-              { key: 'closest', title: 'The Closest', desc: 'Answer with a number. Nearest wins.' },
-            ].map(g => (
-              <button key={g.key} onClick={() => setGame(g.key)} style={{
-                textAlign: 'left', padding: 20, cursor: 'pointer',
-                background: game === g.key ? T.ink : T.bg,
-                color: game === g.key ? T.bg : T.ink,
-                border: `1.5px solid ${T.ink}`, fontFamily: fontStack.body,
-              }}>
-                <div style={{ fontFamily: fontStack.display, fontSize: 22, fontWeight: 500, marginBottom: 6 }}>{g.title}</div>
-                <div style={{ fontSize: 13, opacity: 0.75 }}>{g.desc}</div>
-              </button>
-            ))}
+            {GAMES.map(g => {
+              const selected = games.includes(g.key);
+              return (
+                <button key={g.key} onClick={() => toggleGame(g.key)} style={{
+                  textAlign: 'left', padding: 20, cursor: 'pointer',
+                  background: selected ? T.ink : T.bg,
+                  color: selected ? T.bg : T.ink,
+                  border: `1.5px solid ${T.ink}`, fontFamily: fontStack.body,
+                }}>
+                  <div style={{ fontFamily: fontStack.display, fontSize: 22, fontWeight: 500, marginBottom: 6 }}>{g.title}</div>
+                  <div style={{ fontSize: 13, opacity: 0.75 }}>{g.desc}</div>
+                </button>
+              );
+            })}
           </div>
         </section>
 
@@ -216,12 +244,12 @@ export default function Home() {
             display: 'flex', justifyContent: 'space-between', alignItems: 'center',
           }}>
             <span>§ 03 — Categories ({categories.length} selected)</span>
-            <button onClick={() => setCategories(allSelected ? ['General'] : [...CATEGORIES])} style={{
+            <button onClick={() => setCategories(allCategoriesSelected ? ['General'] : [...CATEGORIES])} style={{
               background: 'none', border: 'none', cursor: 'pointer', color: T.inkMute,
               fontFamily: fontStack.mono, fontSize: 11, letterSpacing: '0.15em',
               textTransform: 'uppercase', padding: 0,
             }}>
-              {allSelected ? 'Clear' : 'Select All'}
+              {allCategoriesSelected ? 'Clear' : 'Select All'}
             </button>
           </div>
           <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>

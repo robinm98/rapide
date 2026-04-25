@@ -9,10 +9,16 @@ type Player = { id: string; name: string; score: number; isHost?: boolean };
 type Room = {
   code: string;
   host_id: string;
-  config: { game: string; categories: string[]; rounds: number };
+  config: { games: string[]; categories: string[]; rounds: number };
   state: any;
   players: Player[];
 };
+
+function gameLabel(game: string) {
+  if (game === 'trivia') return 'TRIVIA';
+  if (game === 'wall') return 'THE WALL';
+  return 'THE CLOSEST';
+}
 
 export default function RoomPage({ params }: { params: { code: string } }) {
   const router = useRouter();
@@ -98,7 +104,6 @@ export default function RoomPage({ params }: { params: { code: string } }) {
     );
   }
 
-  const me = room.players.find(p => p.id === playerId);
   const isHost = room.host_id === playerId;
   const { state, config } = room;
 
@@ -107,6 +112,7 @@ export default function RoomPage({ params }: { params: { code: string } }) {
     const catLabel = config.categories.length <= 3
       ? config.categories.map((c: string) => c.toUpperCase()).join(', ')
       : `${config.categories.length} CATEGORIES`;
+    const gamesLabel = config.games.map(gameLabel).join(' · ');
     return (
       <Shell>
         <main style={{ maxWidth: 900, margin: '0 auto', padding: '48px clamp(16px, 4vw, 32px)' }}>
@@ -136,7 +142,7 @@ export default function RoomPage({ params }: { params: { code: string } }) {
           </div>
 
           <div style={{ marginTop: 32, fontFamily: fontStack.mono, fontSize: 11, color: T.inkMute, textAlign: 'center' }}>
-            {config.game.toUpperCase()} · {catLabel} · {config.rounds} ROUNDS
+            {gamesLabel} · {catLabel} · {config.rounds} ROUNDS
           </div>
 
           <div style={{ marginTop: 40, textAlign: 'center' }}>
@@ -199,6 +205,7 @@ export default function RoomPage({ params }: { params: { code: string } }) {
 
   // ================= IN GAME =================
   const q = state.question;
+  const currentGame: string = state.currentGame || 'trivia';
   const iAnswered = state.answers[playerId] !== undefined;
   const answerCount = Object.keys(state.answers).length;
   const everyoneAnswered = answerCount === room.players.length;
@@ -208,7 +215,7 @@ export default function RoomPage({ params }: { params: { code: string } }) {
       <main style={{ maxWidth: 1100, margin: '0 auto', padding: 'clamp(16px, 4vw, 32px)' }}>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 32, paddingBottom: 20, borderBottom: `1px solid ${T.lineFade}`, flexWrap: 'wrap', gap: 12 }}>
           <div style={{ fontFamily: fontStack.mono, fontSize: 11, color: T.inkMute, letterSpacing: '0.15em', textTransform: 'uppercase' }}>
-            Round {state.round} / {config.rounds} · {config.game === 'trivia' ? 'Trivia' : config.game === 'wall' ? 'The Wall' : 'The Closest'}
+            Round {state.round} / {config.rounds}
           </div>
           <Tag color={T.accent}>Room {code}</Tag>
         </div>
@@ -232,6 +239,21 @@ export default function RoomPage({ params }: { params: { code: string } }) {
         </div>
 
         <div className="fade-up" style={{ marginBottom: 40 }}>
+          {/* Round mode banner */}
+          <div style={{
+            display: 'inline-block',
+            padding: '6px 14px',
+            background: T.accent,
+            color: '#FFF',
+            fontFamily: fontStack.mono,
+            fontSize: 13,
+            letterSpacing: '0.15em',
+            textTransform: 'uppercase',
+            marginBottom: 20,
+          }}>
+            Round {state.round} · {gameLabel(currentGame)}
+          </div>
+
           {q.imageUrl && (
             <img
               src={q.imageUrl}
@@ -251,12 +273,12 @@ export default function RoomPage({ params }: { params: { code: string } }) {
           <h2 style={{ fontFamily: fontStack.display, fontSize: 'clamp(28px, 4vw, 42px)', fontWeight: 400, lineHeight: 1.2, letterSpacing: '-0.01em', margin: 0 }}>
             {q.question}
           </h2>
-          {config.game === 'wall' && q.criterion && (
+          {currentGame === 'wall' && q.criterion && (
             <div style={{ marginTop: 12, fontFamily: fontStack.mono, fontSize: 12, color: T.inkSoft }}>
               Criterion: {q.criterion} · Pick 8
             </div>
           )}
-          {config.game === 'closest' && q.unit && (
+          {currentGame === 'closest' && q.unit && (
             <div style={{ marginTop: 12, fontFamily: fontStack.mono, fontSize: 12, color: T.inkSoft }}>
               Answer in: {q.unit}
             </div>
@@ -264,7 +286,7 @@ export default function RoomPage({ params }: { params: { code: string } }) {
         </div>
 
         {/* TRIVIA */}
-        {config.game === 'trivia' && (
+        {currentGame === 'trivia' && (
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))', gap: 12 }}>
             {q.choices.map((choice: string, idx: number) => {
               const isCorrect = idx === q.correctIndex;
@@ -304,7 +326,7 @@ export default function RoomPage({ params }: { params: { code: string } }) {
         )}
 
         {/* WALL */}
-        {config.game === 'wall' && (
+        {currentGame === 'wall' && (
           <>
             {state.phase === 'answering' && !iAnswered && (
               <div style={{ marginBottom: 16, fontFamily: fontStack.mono, fontSize: 12, color: T.inkSoft }}>
@@ -353,7 +375,7 @@ export default function RoomPage({ params }: { params: { code: string } }) {
         )}
 
         {/* CLOSEST */}
-        {config.game === 'closest' && (
+        {currentGame === 'closest' && (
           <>
             {state.phase === 'answering' && !iAnswered && (
               <div style={{ display: 'flex', gap: 12 }}>
