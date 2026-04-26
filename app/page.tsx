@@ -287,7 +287,10 @@ export default function Home() {
         </section>
 
         <section style={{ marginBottom: 40 }}>
-          <div style={{ fontFamily: fontStack.mono, fontSize: 11, letterSpacing: '0.15em', textTransform: 'uppercase', color: T.inkMute, marginBottom: 16 }}>§ 04 — How many rounds</div>
+          <div style={{ fontFamily: fontStack.mono, fontSize: 11, letterSpacing: '0.15em', textTransform: 'uppercase', color: T.inkMute, marginBottom: 8 }}>§ 04 — Rounds per game</div>
+          <div style={{ fontFamily: fontStack.mono, fontSize: 11, color: T.inkMute, letterSpacing: '0.12em', marginBottom: 14 }}>
+            {rounds} per game × {games.length} game{games.length !== 1 ? 's' : ''} selected = {rounds * games.length} total rounds
+          </div>
           <div style={{ display: 'flex', gap: 8 }}>
             {[3, 5, 7, 10].map(n => (
               <button key={n} onClick={() => setRounds(n)} style={{

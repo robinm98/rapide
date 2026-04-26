@@ -1,6 +1,6 @@
 'use client';
 import React from 'react';
-import Link from 'next/link';
+import { useRouter } from 'next/navigation';
 import { T, fontStack } from '@/lib/design';
 
 export const Btn = ({ children, onClick, variant = 'primary', disabled, style = {}, type = 'button' }: any) => {
@@ -48,30 +48,36 @@ export const Tag = ({ children, color = T.ink }: any) => (
   }}>{children}</span>
 );
 
-export const Shell = ({ children, hideHeader }: any) => (
-  <div style={{
-    minHeight: '100vh', background: T.bg, color: T.ink,
-    fontFamily: fontStack.body,
-    backgroundImage: `radial-gradient(${T.lineFade} 1px, transparent 1px)`,
-    backgroundSize: '24px 24px',
-  }}>
-    {!hideHeader && (
-      <header style={{
-        maxWidth: 1100, margin: '0 auto', padding: '28px 32px',
-        display: 'flex', justifyContent: 'space-between', alignItems: 'center',
-        borderBottom: `1px solid ${T.lineFade}`,
-      }}>
-        <Link href="/" style={{ display: 'flex', alignItems: 'baseline', gap: 14, textDecoration: 'none', color: 'inherit', cursor: 'pointer' }}>
-          <div style={{ fontFamily: fontStack.display, fontSize: 22, fontWeight: 600, letterSpacing: '-0.02em' }}>
-            Salon<span style={{ color: T.accent }}>.</span>
+export const Shell = ({ children, hideHeader }: any) => {
+  const router = useRouter();
+  return (
+    <div style={{
+      minHeight: '100vh', background: T.bg, color: T.ink,
+      fontFamily: fontStack.body,
+      backgroundImage: `radial-gradient(${T.lineFade} 1px, transparent 1px)`,
+      backgroundSize: '24px 24px',
+    }}>
+      {!hideHeader && (
+        <header style={{
+          maxWidth: 1100, margin: '0 auto', padding: '28px 32px',
+          display: 'flex', justifyContent: 'space-between', alignItems: 'center',
+          borderBottom: `1px solid ${T.lineFade}`,
+        }}>
+          <div
+            onClick={() => router.push('/')}
+            style={{ display: 'flex', alignItems: 'baseline', gap: 14, cursor: 'pointer' }}
+          >
+            <div style={{ fontFamily: fontStack.display, fontSize: 22, fontWeight: 600, letterSpacing: '-0.02em' }}>
+              Salon<span style={{ color: T.accent }}>.</span>
+            </div>
+            <div style={{ fontFamily: fontStack.mono, fontSize: 10, color: T.inkMute, letterSpacing: '0.15em', textTransform: 'uppercase' }}>
+              A Parlor Game
+            </div>
           </div>
-          <div style={{ fontFamily: fontStack.mono, fontSize: 10, color: T.inkMute, letterSpacing: '0.15em', textTransform: 'uppercase' }}>
-            A Parlor Game
-          </div>
-        </Link>
-        <Tag color={T.inkMute}>Est. 2026</Tag>
-      </header>
-    )}
-    {children}
-  </div>
-);
+          <Tag color={T.inkMute}>Est. 2026</Tag>
+        </header>
+      )}
+      {children}
+    </div>
+  );
+};

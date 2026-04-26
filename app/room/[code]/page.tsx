@@ -215,7 +215,7 @@ export default function RoomPage({ params }: { params: { code: string } }) {
       <main style={{ maxWidth: 1100, margin: '0 auto', padding: 'clamp(16px, 4vw, 32px)' }}>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 32, paddingBottom: 20, borderBottom: `1px solid ${T.lineFade}`, flexWrap: 'wrap', gap: 12 }}>
           <div style={{ fontFamily: fontStack.mono, fontSize: 11, color: T.inkMute, letterSpacing: '0.15em', textTransform: 'uppercase' }}>
-            Round {state.round} / {config.rounds}
+            Round {(state.queueIndex ?? 0) + 1} / {state.queue?.length ?? config.rounds}
           </div>
           <Tag color={T.accent}>Room {code}</Tag>
         </div>
@@ -251,7 +251,7 @@ export default function RoomPage({ params }: { params: { code: string } }) {
             textTransform: 'uppercase',
             marginBottom: 20,
           }}>
-            Round {state.round} · {gameLabel(currentGame)}
+            Round {(state.queueIndex ?? 0) + 1} · {gameLabel(currentGame)}
           </div>
 
           {q.imageUrl && (
@@ -378,7 +378,7 @@ export default function RoomPage({ params }: { params: { code: string } }) {
         {currentGame === 'closest' && (
           <>
             {state.phase === 'answering' && !iAnswered && (
-              <div style={{ display: 'flex', gap: 12 }}>
+              <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap' }}>
                 <input
                   type="text"
                   inputMode="decimal"
@@ -386,12 +386,18 @@ export default function RoomPage({ params }: { params: { code: string } }) {
                   onChange={e => setClosestInput(e.target.value)}
                   placeholder="Your guess…"
                   autoFocus
-                  style={{ flex: 1, padding: 20, fontSize: 28, fontFamily: fontStack.display, background: 'transparent', border: `1.5px solid ${T.ink}`, color: T.ink, outline: 'none' }}
+                  style={{
+                    flex: isMobile ? '1 1 100%' : '1 1 200px',
+                    minWidth: 0, padding: 20,
+                    fontSize: 'clamp(20px, 5vw, 28px)',
+                    fontFamily: fontStack.display, background: 'transparent',
+                    border: `1.5px solid ${T.ink}`, color: T.ink, outline: 'none',
+                  }}
                 />
                 <Btn onClick={() => {
                   const n = parseFloat(closestInput);
                   if (!isNaN(n)) callAPI('answer', { answer: n });
-                }} disabled={submitting || !closestInput.trim()}>Submit</Btn>
+                }} disabled={submitting || !closestInput.trim()} style={isMobile ? { width: '100%' } : {}}>Submit</Btn>
               </div>
             )}
             {state.phase === 'answering' && iAnswered && (
@@ -422,7 +428,7 @@ export default function RoomPage({ params }: { params: { code: string } }) {
                       <div style={{ display: 'flex', gap: 16, alignItems: 'baseline' }}>
                         <span style={{ fontFamily: fontStack.mono, fontSize: 11 }}>#{i + 1}</span>
                         <span style={{ fontFamily: fontStack.display, fontSize: 22, fontWeight: 500 }}>{p.name}</span>
-                        {i === 0 && <Tag color={T.correct}>+3 points</Tag>}
+                        {i === 0 && <Tag color={T.correct}>+8 pts</Tag>}
                       </div>
                       <div style={{ fontFamily: fontStack.mono, fontSize: 14 }}>
                         {p.guess?.toLocaleString() ?? '—'}
@@ -456,7 +462,7 @@ export default function RoomPage({ params }: { params: { code: string } }) {
               </div>
               {isHost && (
                 <Btn variant="accent" onClick={() => callAPI('next')} disabled={submitting}>
-                  {state.round >= config.rounds ? 'See Results →' : 'Next Round →'}
+                  {(state.queueIndex ?? 0) + 1 >= (state.queue?.length ?? config.rounds) ? 'See Results →' : 'Next Round →'}
                 </Btn>
               )}
               {!isHost && (

@@ -71,14 +71,21 @@ export async function POST(req: Request) {
       if (!room) return NextResponse.json({ error: 'Room not found' }, { status: 404 });
       if (room.host_id !== playerId) return NextResponse.json({ error: 'Only host can start' }, { status: 403 });
 
-      const game = pickOne<string>(room.config.games);
-      const category = pickOne<string>(room.config.categories);
-      const question = await generateQuestion(game as any, category, []);
+      const queue: { game: string; category: string }[] = [];
+      for (const g of room.config.games) {
+        for (let i = 0; i < room.config.rounds; i++) {
+          queue.push({ game: g, category: pickOne<string>(room.config.categories) });
+        }
+      }
+      const first = queue[0];
+      const question = await generateQuestion(first.game as any, first.category, []);
 
       const state = {
         phase: 'answering',
         round: 1,
-        currentGame: game,
+        queue,
+        queueIndex: 0,
+        currentGame: first.game,
         question,
         answers: {},
         wallPicks: {},
@@ -154,25 +161,29 @@ export async function POST(req: Request) {
       if (!room) return NextResponse.json({ error: 'Room not found' }, { status: 404 });
       if (room.host_id !== playerId) return NextResponse.json({ error: 'Only host can advance' }, { status: 403 });
 
-      const { config, state } = room;
-      if (state.round >= config.rounds) {
+      const { state } = room;
+      const queue: { game: string; category: string }[] = state.queue ?? [];
+      const nextIndex = (state.queueIndex ?? 0) + 1;
+
+      if (nextIndex >= queue.length) {
         const newState = { ...state, phase: 'finished' };
         await supabaseAdmin.from('rooms').update({ state: newState }).eq('code', code);
         return NextResponse.json({ ok: true, finished: true });
       }
 
-      const game = pickOne<string>(config.games);
-      const category = pickOne<string>(config.categories);
-      const question = await generateQuestion(game as any, category, state.pastQuestions);
+      const entry = queue[nextIndex];
+      const question = await generateQuestion(entry.game as any, entry.category, state.pastQuestions ?? []);
 
       const newState = {
+        ...state,
         phase: 'answering',
         round: state.round + 1,
-        currentGame: game,
+        queueIndex: nextIndex,
+        currentGame: entry.game,
         question,
         answers: {},
         wallPicks: {},
-        pastQuestions: [...state.pastQuestions, question.question.slice(0, 80)],
+        pastQuestions: [...(state.pastQuestions ?? []), question.question.slice(0, 80)],
       };
       const { error } = await supabaseAdmin.from('rooms').update({ state: newState }).eq('code', code);
       if (error) throw error;

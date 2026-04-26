@@ -41,6 +41,7 @@ For image-first questions:
   • The question text MUST NOT name, describe, hint at, or paraphrase the subject — the image carries that
   • Set "wikiQuery" to the EXACT Wikipedia article title of the subject shown (e.g. "Mona Lisa", "Mount Fuji", "Frida Kahlo", "Margherita pizza")
   • The four choices are the candidate answers
+  • STRICTLY AVOID these overused subjects: Mona Lisa, Eiffel Tower, Big Ben, Statue of Liberty, Mount Everest, Mount Fuji, Taj Mahal, Pyramids of Giza, Colosseum, Great Wall of China, Sydney Opera House, Christ the Redeemer, Parthenon, Stonehenge, Machu Picchu. Prefer less-obvious but still visually recognizable subjects: lesser-known landmarks, regional dishes, animals from specific habitats, historical figures beyond the most famous tier, paintings beyond the top 10, flags of less-discussed countries.
 
 TEXT-ONLY RULE (use ~70% of the time):
   • Set "imageFirst": false

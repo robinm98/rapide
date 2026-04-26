@@ -50,17 +50,6 @@ const GAMES: { key: GameType; title: string; desc: string }[] = [
 
 const ROUNDS_OPTIONS = [3, 5, 7, 10];
 
-// ─── Fisher-Yates shuffle ─────────────────────────────────────────────────────
-
-function shuffle<T>(arr: T[]): T[] {
-  const a = [...arr];
-  for (let i = a.length - 1; i > 0; i--) {
-    const j = Math.floor(Math.random() * (i + 1));
-    [a[i], a[j]] = [a[j], a[i]];
-  }
-  return a;
-}
-
 function pickOne<T>(arr: T[]): T {
   return arr[Math.floor(Math.random() * arr.length)];
 }
@@ -74,7 +63,24 @@ function buildQueue(games: GameType[], categories: string[], roundsPerGame: numb
       entries.push({ game, category: pickOne(categories) });
     }
   }
-  return shuffle(entries);
+  return entries;
+}
+
+// ─── Session storage helpers ──────────────────────────────────────────────────
+
+function readRecentQuestions(): string[] {
+  try {
+    const raw = sessionStorage.getItem('salon_recent_questions');
+    return raw ? JSON.parse(raw) : [];
+  } catch { return []; }
+}
+
+function appendRecentQuestion(q: string) {
+  try {
+    const existing = readRecentQuestions();
+    const updated = [...new Set([...existing, q])].slice(-50);
+    sessionStorage.setItem('salon_recent_questions', JSON.stringify(updated));
+  } catch {}
 }
 
 // ─── Sub-components ───────────────────────────────────────────────────────────
@@ -256,34 +262,33 @@ function SetupScreen({ onStart }: { onStart: (players: Player[], queue: RoundEnt
 // ─── Question Display ─────────────────────────────────────────────────────────
 
 function QuestionDisplay({
-  round, total, question, game, category, highlighted, onHighlight, onReveal,
+  round, total, question, game, category, highlighted, onHighlight, onReveal, isMobile,
 }: {
   round: number; total: number; question: Question; game: GameType; category: string;
   highlighted: number | null; onHighlight: (i: number) => void; onReveal: () => void;
+  isMobile: boolean;
 }) {
-  const qStyle: React.CSSProperties = {
-    fontFamily: fontStack.display,
-    fontSize: 'clamp(28px, 4vw, 64px)',
-    fontWeight: 400, lineHeight: 1.15,
-    letterSpacing: '-0.02em', margin: '32px 0',
-  };
-
   return (
-    <div style={{ maxWidth: 1100, margin: '0 auto', padding: '32px clamp(16px, 4vw, 48px)' }}>
+    <div style={{ maxWidth: 1400, margin: '0 auto', padding: '32px clamp(16px, 4vw, 48px)' }}>
       {/* Header bar */}
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 32 }}>
-        <div style={{ display: 'flex', gap: 16, alignItems: 'center' }}>
-          <Tag color={T.inkMute}>Round {round}/{total}</Tag>
+      <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', marginBottom: 32, position: 'relative' }}>
+        <div style={{ display: 'flex', gap: 12, alignItems: 'center' }}>
+          <span style={{ fontFamily: fontStack.mono, fontSize: 11, letterSpacing: '0.2em', textTransform: 'uppercase', color: T.inkMute }}>
+            Round {round}/{total}
+          </span>
           <Tag color={T.accent}>{GAMES.find(g => g.key === game)?.title}</Tag>
           <Tag color={T.inkMute}>{category}</Tag>
         </div>
-        <Btn variant="ghost" onClick={onReveal} style={{ fontSize: 11 }}>Reveal →</Btn>
+        <div style={{ position: 'absolute', right: 0 }}>
+          <Btn variant="ghost" onClick={onReveal}>Reveal →</Btn>
+        </div>
       </div>
 
       {/* Image */}
       {question.imageUrl && (
         <div style={{ marginBottom: 24, textAlign: 'center' }}>
           <img src={question.imageUrl} alt="question" style={{
+            display: 'block', margin: '0 auto',
             maxHeight: 'clamp(200px, 30vw, 400px)', maxWidth: '100%',
             border: `1px solid ${T.lineFade}`,
           }} />
@@ -291,11 +296,17 @@ function QuestionDisplay({
       )}
 
       {/* Question text */}
-      <div style={qStyle}>{question.question}</div>
+      <div style={{
+        fontFamily: fontStack.display,
+        fontSize: 'clamp(28px, 4vw, 64px)',
+        fontWeight: 400, lineHeight: 1.15, letterSpacing: '-0.02em',
+        textAlign: 'center', maxWidth: 1100, margin: '0 auto',
+        marginBottom: 'clamp(32px, 4vh, 64px)',
+      }}>{question.question}</div>
 
       {/* Trivia choices */}
       {game === 'trivia' && question.choices && (
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))', gap: 12, marginTop: 8 }}>
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: 12, maxWidth: 1000, margin: '0 auto' }}>
           {question.choices.map((choice, i) => (
             <button key={i} onClick={() => onHighlight(i)} style={{
               textAlign: 'left', padding: '16px 20px', cursor: 'pointer',
@@ -315,11 +326,15 @@ function QuestionDisplay({
 
       {/* Wall grid */}
       {game === 'wall' && question.items && (
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(140px, 1fr))', gap: 8, marginTop: 8 }}>
+        <div style={{
+          display: 'grid',
+          gridTemplateColumns: `repeat(${isMobile ? 2 : 4}, 1fr)`,
+          gap: 8, maxWidth: 1200, margin: '0 auto',
+        }}>
           {question.items.map((item, i) => (
             <div key={i} style={{
               padding: '12px 14px', border: `1px solid ${T.lineFade}`,
-              fontFamily: fontStack.body, fontSize: 'clamp(13px, 1.4vw, 16px)',
+              fontFamily: fontStack.body, fontSize: 'clamp(13px, 1.4vw, 18px)',
               textAlign: 'center',
             }}>{item.label}</div>
           ))}
@@ -328,10 +343,10 @@ function QuestionDisplay({
 
       {/* Closest — no input, just show question */}
       {game === 'closest' && question.unit && (
-        <div style={{ ...mono(13, { color: T.inkMute, marginTop: 8 }) }}>Unit: {question.unit}</div>
+        <div style={{ textAlign: 'center', ...mono(13, { color: T.inkMute }) }}>Unit: {question.unit}</div>
       )}
 
-      <div style={{ marginTop: 48, ...mono(11, { color: T.inkMute }) }}>
+      <div style={{ marginTop: 48, textAlign: 'center', ...mono(11, { color: T.inkMute }) }}>
         Space to reveal · 1–4 to highlight choices
       </div>
     </div>
@@ -347,19 +362,24 @@ function RevealDisplay({
   onScore: () => void;
 }) {
   return (
-    <div style={{ maxWidth: 1100, margin: '0 auto', padding: '32px clamp(16px, 4vw, 48px)' }}>
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 32 }}>
-        <div style={{ display: 'flex', gap: 16, alignItems: 'center' }}>
-          <Tag color={T.inkMute}>Round {round}/{total}</Tag>
+    <div style={{ maxWidth: 1400, margin: '0 auto', padding: '32px clamp(16px, 4vw, 48px)' }}>
+      <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', marginBottom: 32, position: 'relative' }}>
+        <div style={{ display: 'flex', gap: 12, alignItems: 'center' }}>
+          <span style={{ fontFamily: fontStack.mono, fontSize: 11, letterSpacing: '0.2em', textTransform: 'uppercase', color: T.inkMute }}>
+            Round {round}/{total}
+          </span>
           <Tag color={T.accent}>{GAMES.find(g => g.key === game)?.title}</Tag>
           <Tag color={T.inkMute}>{category}</Tag>
         </div>
-        <Btn variant="accent" onClick={onScore}>Score →</Btn>
+        <div style={{ position: 'absolute', right: 0 }}>
+          <Btn variant="accent" onClick={onScore}>Score →</Btn>
+        </div>
       </div>
 
       {question.imageUrl && (
         <div style={{ marginBottom: 24, textAlign: 'center' }}>
           <img src={question.imageUrl} alt="question" style={{
+            display: 'block', margin: '0 auto',
             maxHeight: 'clamp(160px, 24vw, 320px)', maxWidth: '100%',
             border: `1px solid ${T.lineFade}`,
           }} />
@@ -368,7 +388,8 @@ function RevealDisplay({
 
       <div style={{
         fontFamily: fontStack.display, fontSize: 'clamp(22px, 3vw, 48px)',
-        fontWeight: 400, lineHeight: 1.15, letterSpacing: '-0.02em', margin: '24px 0',
+        fontWeight: 400, lineHeight: 1.15, letterSpacing: '-0.02em',
+        textAlign: 'center', maxWidth: 1100, margin: '0 auto 24px',
       }}>{question.question}</div>
 
       {/* Trivia answer */}
@@ -598,6 +619,14 @@ export default function PresenterPage() {
   const [pastQuestions, setPastQuestions] = useState<string[]>([]);
   const [loadError, setLoadError] = useState('');
   const [showQuit, setShowQuit] = useState(false);
+  const [isMobile, setIsMobile] = useState(false);
+
+  useEffect(() => {
+    const update = () => setIsMobile(window.innerWidth < 768);
+    update();
+    window.addEventListener('resize', update);
+    return () => window.removeEventListener('resize', update);
+  }, []);
 
   const currentEntry = queue[roundIndex] ?? null;
   const totalRounds = queue.length;
@@ -606,13 +635,16 @@ export default function PresenterPage() {
     setPhase('loading');
     setLoadError('');
     try {
+      const recent = readRecentQuestions();
+      const combined = [...new Set([...recent, ...past])].slice(-50);
       const res = await fetch('/api/presenter-question', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ game: entry.game, category: entry.category, previousQuestions: past }),
+        body: JSON.stringify({ game: entry.game, category: entry.category, previousQuestions: combined }),
       });
       const data = await res.json();
       if (data.error) throw new Error(data.error);
+      appendRecentQuestion(data.question.slice(0, 80));
       setQuestion(data);
       setHighlighted(null);
       setPhase('displaying');
@@ -637,17 +669,17 @@ export default function PresenterPage() {
     const newPlayers = players.map(p => ({ ...p, score: p.score + (deltas[p.id] ?? 0) }));
     setPlayers(newPlayers);
 
-    const q = question;
-    if (q) {
-      setPastQuestions(prev => [...prev, q.question.slice(0, 80)]);
-    }
+    const newPast = question
+      ? [...pastQuestions, question.question.slice(0, 80)]
+      : pastQuestions;
+    setPastQuestions(newPast);
 
     const nextIndex = roundIndex + 1;
     if (nextIndex >= totalRounds) {
       setPhase('results');
     } else {
       setRoundIndex(nextIndex);
-      fetchQuestion(queue[nextIndex], pastQuestions);
+      fetchQuestion(queue[nextIndex], newPast);
     }
   };
 
@@ -741,6 +773,7 @@ export default function PresenterPage() {
             highlighted={highlighted}
             onHighlight={setHighlighted}
             onReveal={handleReveal}
+            isMobile={isMobile}
           />
         )}
 
