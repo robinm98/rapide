@@ -1,5 +1,6 @@
 'use client';
 import React from 'react';
+import Link from 'next/link';
 import { T, fontStack } from '@/lib/design';
 
 export const Btn = ({ children, onClick, variant = 'primary', disabled, style = {}, type = 'button' }: any) => {
@@ -60,14 +61,14 @@ export const Shell = ({ children, hideHeader }: any) => (
         display: 'flex', justifyContent: 'space-between', alignItems: 'center',
         borderBottom: `1px solid ${T.lineFade}`,
       }}>
-        <div style={{ display: 'flex', alignItems: 'baseline', gap: 14 }}>
+        <Link href="/" style={{ display: 'flex', alignItems: 'baseline', gap: 14, textDecoration: 'none', color: 'inherit', cursor: 'pointer' }}>
           <div style={{ fontFamily: fontStack.display, fontSize: 22, fontWeight: 600, letterSpacing: '-0.02em' }}>
             Salon<span style={{ color: T.accent }}>.</span>
           </div>
           <div style={{ fontFamily: fontStack.mono, fontSize: 10, color: T.inkMute, letterSpacing: '0.15em', textTransform: 'uppercase' }}>
             A Parlor Game
           </div>
-        </div>
+        </Link>
         <Tag color={T.inkMute}>Est. 2026</Tag>
       </header>
     )}

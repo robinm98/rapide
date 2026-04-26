@@ -121,7 +121,7 @@ export async function POST(req: Request) {
       if (currentGame === 'trivia') {
         newPlayers = players.map((p: any) => {
           const a = state.answers[p.id];
-          return a === q.correctIndex ? { ...p, score: p.score + 1 } : p;
+          return a === q.correctIndex ? { ...p, score: p.score + 8 } : p;
         });
       } else if (currentGame === 'wall') {
         newPlayers = players.map((p: any) => {
@@ -137,7 +137,7 @@ export async function POST(req: Request) {
           const d = Math.abs(g - q.answer);
           if (d < bestDiff) { bestDiff = d; bestId = p.id; }
         });
-        newPlayers = players.map((p: any) => p.id === bestId ? { ...p, score: p.score + 3 } : p);
+        newPlayers = players.map((p: any) => p.id === bestId ? { ...p, score: p.score + 8 } : p);
       }
 
       const newState = { ...state, phase: 'revealing' };

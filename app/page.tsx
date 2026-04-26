@@ -124,32 +124,49 @@ export default function Home() {
 
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', borderTop: `1px solid ${T.line}` }}>
             {[
-              { key: 'create', num: '01', title: 'Host a Room', desc: 'Create a game, share the 4-letter code with friends.', tag: 'Host' },
-              { key: 'join', num: '02', title: 'Join a Room', desc: 'Someone sent you a code? Enter it and hop in.', tag: 'Guest' },
-            ].map((m, i) => (
-              <button key={m.key} onClick={() => { setView(m.key as any); setError(''); }} style={{
+              { key: 'create', num: '01', title: 'Host a Room', desc: 'Create a game, share the 4-letter code with friends.', tag: 'Host', href: null },
+              { key: 'join', num: '02', title: 'Join a Room', desc: 'Someone sent you a code? Enter it and hop in.', tag: 'Guest', href: null },
+              { key: 'presenter', num: '03', title: 'Around the Table', desc: 'No phones needed. One screen, paper scoring, everyone together.', tag: 'In Person', href: '/presenter' },
+            ].map((m, i) => {
+              const isLast = i === 2;
+              const style: React.CSSProperties = {
                 background: 'transparent', border: 'none', cursor: 'pointer',
-                borderRight: i === 0 ? `1px solid ${T.line}` : 'none',
+                borderRight: !isLast ? `1px solid ${T.line}` : 'none',
                 borderBottom: `1px solid ${T.line}`,
                 padding: '48px clamp(16px, 4vw, 32px)', textAlign: 'left', color: T.ink,
-                transition: 'background 0.2s',
-              }}
-                onMouseEnter={e => (e.currentTarget as HTMLElement).style.background = T.bgAlt}
-                onMouseLeave={e => (e.currentTarget as HTMLElement).style.background = 'transparent'}
-              >
-                <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 40 }}>
-                  <span style={{ fontFamily: fontStack.mono, fontSize: 11, color: T.inkMute, letterSpacing: '0.15em' }}>№ {m.num}</span>
-                  <Tag color={T.inkMute}>{m.tag}</Tag>
-                </div>
-                <h2 style={{ fontFamily: fontStack.display, fontSize: 36, fontWeight: 500, margin: '0 0 12px', letterSpacing: '-0.02em' }}>
-                  {m.title}
-                </h2>
-                <p style={{ margin: 0, color: T.inkSoft, lineHeight: 1.5, fontSize: 15 }}>{m.desc}</p>
-                <div style={{ marginTop: 32, fontFamily: fontStack.mono, fontSize: 11, letterSpacing: '0.15em', textTransform: 'uppercase' }}>
-                  Enter →
-                </div>
-              </button>
-            ))}
+                transition: 'background 0.2s', display: 'block', width: '100%',
+                textDecoration: 'none',
+              };
+              const inner = (
+                <>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 40 }}>
+                    <span style={{ fontFamily: fontStack.mono, fontSize: 11, color: T.inkMute, letterSpacing: '0.15em' }}>№ {m.num}</span>
+                    <Tag color={T.inkMute}>{m.tag}</Tag>
+                  </div>
+                  <h2 style={{ fontFamily: fontStack.display, fontSize: 36, fontWeight: 500, margin: '0 0 12px', letterSpacing: '-0.02em' }}>
+                    {m.title}
+                  </h2>
+                  <p style={{ margin: 0, color: T.inkSoft, lineHeight: 1.5, fontSize: 15 }}>{m.desc}</p>
+                  <div style={{ marginTop: 32, fontFamily: fontStack.mono, fontSize: 11, letterSpacing: '0.15em', textTransform: 'uppercase' }}>
+                    Enter →
+                  </div>
+                </>
+              );
+              if (m.href) {
+                return (
+                  <a key={m.key} href={m.href} style={style}
+                    onMouseEnter={e => (e.currentTarget as HTMLElement).style.background = T.bgAlt}
+                    onMouseLeave={e => (e.currentTarget as HTMLElement).style.background = 'transparent'}
+                  >{inner}</a>
+                );
+              }
+              return (
+                <button key={m.key} onClick={() => { setView(m.key as any); setError(''); }} style={style}
+                  onMouseEnter={e => (e.currentTarget as HTMLElement).style.background = T.bgAlt}
+                  onMouseLeave={e => (e.currentTarget as HTMLElement).style.background = 'transparent'}
+                >{inner}</button>
+              );
+            })}
           </div>
         </main>
       </Shell>
