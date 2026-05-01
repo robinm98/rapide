@@ -76,10 +76,14 @@ export const Shell = ({ children, hideHeader }: any) => {
   const showHome = pathname !== '/';
   return (
     <div className="shell-root" style={{
+      display: 'flex',
+      flexDirection: 'column',
       background: T.bg, color: T.ink,
       fontFamily: fontStack.body,
       backgroundImage: `radial-gradient(${T.lineFade} 1px, transparent 1px)`,
       backgroundSize: '24px 24px',
+      paddingTop: 'env(safe-area-inset-top)',
+      paddingBottom: 'env(safe-area-inset-bottom)',
     }}>
       {!hideHeader && (
         <header style={{

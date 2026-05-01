@@ -5,11 +5,11 @@ export const runtime = 'nodejs';
 
 export async function POST(req: Request) {
   try {
-    const { game, category, previousQuestions = [] } = await req.json();
+    const { game, category, previousQuestions = [], avoidWikiSubjects = [] } = await req.json();
     if (!game || !category) {
       return NextResponse.json({ error: 'game and category required' }, { status: 400 });
     }
-    const question = await generateQuestion(game, category, previousQuestions);
+    const question = await generateQuestion(game, category, previousQuestions, avoidWikiSubjects);
     return NextResponse.json(question);
   } catch (err: any) {
     console.error('Presenter question error:', err);
