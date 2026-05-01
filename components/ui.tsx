@@ -87,26 +87,33 @@ export const Shell = ({ children, hideHeader }: any) => {
     }}>
       {!hideHeader && (
         <header style={{
-          maxWidth: 1100, margin: '0 auto', padding: '28px 32px',
+          width: '100%',
+          maxWidth: 1100, margin: '0 auto',
+          padding: 'clamp(20px, 4vw, 28px) clamp(16px, 4vw, 32px)',
           display: 'flex', justifyContent: 'space-between', alignItems: 'center',
           borderBottom: `1px solid ${T.lineFade}`,
-          gap: 16,
+          gap: 12,
         }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 16, minWidth: 0 }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 12, minWidth: 0, flexShrink: 1 }}>
             {showHome && <HomeButton onClick={() => router.push('/')} />}
             <div
               onClick={() => router.push('/')}
-              style={{ display: 'flex', alignItems: 'baseline', gap: 14, cursor: 'pointer' }}
+              style={{ display: 'flex', alignItems: 'baseline', gap: 14, cursor: 'pointer', minWidth: 0 }}
             >
               <div style={{ fontFamily: fontStack.display, fontSize: 22, fontWeight: 600, letterSpacing: '-0.02em' }}>
                 Salon<span style={{ color: T.accent }}>.</span>
               </div>
-              <div style={{ fontFamily: fontStack.mono, fontSize: 10, color: T.inkMute, letterSpacing: '0.15em', textTransform: 'uppercase' }}>
+              <div
+                className="shell-header-tagline"
+                style={{ fontFamily: fontStack.mono, fontSize: 10, color: T.inkMute, letterSpacing: '0.15em', textTransform: 'uppercase' }}
+              >
                 A Parlor Game
               </div>
             </div>
           </div>
-          <Tag color={T.inkMute}>Est. 2026</Tag>
+          <span className="shell-header-est">
+            <Tag color={T.inkMute}>Est. 2026</Tag>
+          </span>
         </header>
       )}
       {children}
