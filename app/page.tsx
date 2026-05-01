@@ -186,11 +186,11 @@ export default function Home() {
           <h1 style={{ fontFamily: fontStack.display, fontSize: 56, fontWeight: 400, margin: '16px 0 40px', letterSpacing: '-0.02em' }}>
             Enter the code.
           </h1>
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 20, width: '100%' }}>
             <input value={name} onChange={e => setName(e.target.value)} placeholder="Your name"
-              style={{ padding: '16px 18px', fontSize: 18, background: 'transparent', border: `1.5px solid ${T.ink}`, fontFamily: fontStack.body, color: T.ink, outline: 'none' }} />
+              style={{ width: '100%', padding: '16px 18px', fontSize: 18, background: 'transparent', border: `1.5px solid ${T.ink}`, fontFamily: fontStack.body, color: T.ink, outline: 'none' }} />
             <input value={code} onChange={e => setCode(e.target.value.toUpperCase())} placeholder="ROOM CODE" maxLength={4}
-              style={{ padding: '20px', fontSize: 36, background: 'transparent', border: `1.5px solid ${T.ink}`, fontFamily: fontStack.display, color: T.ink, outline: 'none', textAlign: 'center', letterSpacing: '0.3em' }} />
+              style={{ width: '100%', padding: '20px', fontSize: 'clamp(24px, 8vw, 36px)', background: 'transparent', border: `1.5px solid ${T.ink}`, fontFamily: fontStack.display, color: T.ink, outline: 'none', textAlign: 'center', letterSpacing: '0.3em' }} />
             {error && <div style={{ color: T.wrong, fontFamily: fontStack.mono, fontSize: 12 }}>{error}</div>}
             <Btn variant="accent" onClick={joinRoom} disabled={loading}>
               {loading ? 'Joining…' : 'Join →'}

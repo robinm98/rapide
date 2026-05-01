@@ -1,0 +1,10 @@
+{
+  "name": "Salon",
+  "short_name": "Salon",
+  "description": "An evening of curious questions, answered together.",
+  "start_url": "/",
+  "display": "standalone",
+  "orientation": "portrait",
+  "background_color": "#F5F2EC",
+  "theme_color": "#F5F2EC"
+}
