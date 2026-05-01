@@ -1,6 +1,6 @@
 'use client';
 import React from 'react';
-import { useRouter } from 'next/navigation';
+import { useRouter, usePathname } from 'next/navigation';
 import { T, fontStack } from '@/lib/design';
 
 export const Btn = ({ children, onClick, variant = 'primary', disabled, style = {}, type = 'button' }: any) => {
@@ -48,11 +48,35 @@ export const Tag = ({ children, color = T.ink }: any) => (
   }}>{children}</span>
 );
 
+const HomeButton = ({ onClick }: { onClick: () => void }) => (
+  <button
+    onClick={onClick}
+    style={{
+      padding: '8px 12px',
+      border: 'none',
+      background: 'transparent',
+      cursor: 'pointer',
+      fontFamily: fontStack.mono,
+      fontSize: 11,
+      letterSpacing: '0.15em',
+      textTransform: 'uppercase',
+      color: T.inkSoft,
+      transition: 'color 0.15s',
+    }}
+    onMouseEnter={e => { (e.currentTarget as HTMLElement).style.color = T.ink; }}
+    onMouseLeave={e => { (e.currentTarget as HTMLElement).style.color = T.inkSoft; }}
+  >
+    ← Home
+  </button>
+);
+
 export const Shell = ({ children, hideHeader }: any) => {
   const router = useRouter();
+  const pathname = usePathname();
+  const showHome = pathname !== '/';
   return (
-    <div style={{
-      minHeight: '100vh', background: T.bg, color: T.ink,
+    <div className="shell-root" style={{
+      background: T.bg, color: T.ink,
       fontFamily: fontStack.body,
       backgroundImage: `radial-gradient(${T.lineFade} 1px, transparent 1px)`,
       backgroundSize: '24px 24px',
@@ -62,16 +86,20 @@ export const Shell = ({ children, hideHeader }: any) => {
           maxWidth: 1100, margin: '0 auto', padding: '28px 32px',
           display: 'flex', justifyContent: 'space-between', alignItems: 'center',
           borderBottom: `1px solid ${T.lineFade}`,
+          gap: 16,
         }}>
-          <div
-            onClick={() => router.push('/')}
-            style={{ display: 'flex', alignItems: 'baseline', gap: 14, cursor: 'pointer' }}
-          >
-            <div style={{ fontFamily: fontStack.display, fontSize: 22, fontWeight: 600, letterSpacing: '-0.02em' }}>
-              Salon<span style={{ color: T.accent }}>.</span>
-            </div>
-            <div style={{ fontFamily: fontStack.mono, fontSize: 10, color: T.inkMute, letterSpacing: '0.15em', textTransform: 'uppercase' }}>
-              A Parlor Game
+          <div style={{ display: 'flex', alignItems: 'center', gap: 16, minWidth: 0 }}>
+            {showHome && <HomeButton onClick={() => router.push('/')} />}
+            <div
+              onClick={() => router.push('/')}
+              style={{ display: 'flex', alignItems: 'baseline', gap: 14, cursor: 'pointer' }}
+            >
+              <div style={{ fontFamily: fontStack.display, fontSize: 22, fontWeight: 600, letterSpacing: '-0.02em' }}>
+                Salon<span style={{ color: T.accent }}>.</span>
+              </div>
+              <div style={{ fontFamily: fontStack.mono, fontSize: 10, color: T.inkMute, letterSpacing: '0.15em', textTransform: 'uppercase' }}>
+                A Parlor Game
+              </div>
             </div>
           </div>
           <Tag color={T.inkMute}>Est. 2026</Tag>

@@ -724,7 +724,12 @@ export default function PresenterPage() {
 
   return (
     <Shell hideHeader>
-      <div style={{ minHeight: '100vh', position: 'relative' }}>
+      <div style={{
+        minHeight: '100vh',
+        position: 'relative',
+        paddingTop: 'env(safe-area-inset-top)',
+        paddingBottom: 'env(safe-area-inset-bottom)',
+      }}>
         {/* Quit confirm overlay */}
         {showQuit && (
           <div style={{
