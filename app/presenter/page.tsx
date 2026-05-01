@@ -66,11 +66,14 @@ function buildQueue(games: GameType[], categories: string[], roundsPerGame: numb
   return entries;
 }
 
-// ─── Session storage helpers ──────────────────────────────────────────────────
+// ─── Local storage helpers (persist across sessions) ─────────────────────────
+
+const RECENT_Q_KEY = 'salon_recent_questions';
+const RECENT_WIKI_KEY = 'salon_recent_wiki_subjects';
 
 function readRecentQuestions(): string[] {
   try {
-    const raw = sessionStorage.getItem('salon_recent_questions');
+    const raw = localStorage.getItem(RECENT_Q_KEY);
     return raw ? JSON.parse(raw) : [];
   } catch { return []; }
 }
@@ -78,8 +81,23 @@ function readRecentQuestions(): string[] {
 function appendRecentQuestion(q: string) {
   try {
     const existing = readRecentQuestions();
-    const updated = [...new Set([...existing, q])].slice(-50);
-    sessionStorage.setItem('salon_recent_questions', JSON.stringify(updated));
+    const updated = [...new Set([...existing, q])].slice(-100);
+    localStorage.setItem(RECENT_Q_KEY, JSON.stringify(updated));
+  } catch {}
+}
+
+function readRecentWikiSubjects(): string[] {
+  try {
+    const raw = localStorage.getItem(RECENT_WIKI_KEY);
+    return raw ? JSON.parse(raw) : [];
+  } catch { return []; }
+}
+
+function appendRecentWikiSubject(subject: string) {
+  try {
+    const existing = readRecentWikiSubjects();
+    const updated = [...new Set([...existing, subject])].slice(-100);
+    localStorage.setItem(RECENT_WIKI_KEY, JSON.stringify(updated));
   } catch {}
 }
 
@@ -269,85 +287,101 @@ function QuestionDisplay({
   isMobile: boolean;
 }) {
   return (
-    <div style={{ maxWidth: 1400, margin: '0 auto', padding: '32px clamp(16px, 4vw, 48px)' }}>
-      {/* Header bar */}
-      <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', marginBottom: 32, position: 'relative' }}>
-        <div style={{ display: 'flex', gap: 12, alignItems: 'center' }}>
+    <div style={{
+      flex: 1,
+      display: 'flex',
+      flexDirection: 'column',
+      maxWidth: 1400,
+      width: '100%',
+      margin: '0 auto',
+      padding: 'clamp(16px, 3vw, 32px) clamp(16px, 4vw, 48px)',
+    }}>
+      {/* Top banner */}
+      <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', position: 'relative' }}>
+        <div style={{ display: 'flex', gap: 12, alignItems: 'center', flexWrap: 'wrap', justifyContent: 'center' }}>
           <span style={{ fontFamily: fontStack.mono, fontSize: 11, letterSpacing: '0.2em', textTransform: 'uppercase', color: T.inkMute }}>
             Round {round}/{total}
           </span>
           <Tag color={T.accent}>{GAMES.find(g => g.key === game)?.title}</Tag>
           <Tag color={T.inkMute}>{category}</Tag>
         </div>
-        <div style={{ position: 'absolute', right: 0 }}>
-          <Btn variant="ghost" onClick={onReveal}>Reveal →</Btn>
-        </div>
       </div>
 
-      {/* Image */}
-      {question.imageUrl && (
-        <div style={{ marginBottom: 24, textAlign: 'center' }}>
+      {/* Centered content */}
+      <div style={{
+        flex: 1,
+        display: 'flex',
+        flexDirection: 'column',
+        justifyContent: 'center',
+        alignItems: 'center',
+        textAlign: 'center',
+        padding: 'clamp(24px, 4vw, 64px) 0',
+        gap: 'clamp(20px, 3vh, 40px)',
+      }}>
+        {question.imageUrl && (
           <img src={question.imageUrl} alt="question" style={{
-            display: 'block', margin: '0 auto',
-            maxHeight: 'clamp(200px, 30vw, 400px)', maxWidth: '100%',
+            display: 'block',
+            maxHeight: 'clamp(180px, 30vh, 400px)', maxWidth: '100%',
             border: `1px solid ${T.lineFade}`,
           }} />
-        </div>
-      )}
+        )}
 
-      {/* Question text */}
-      <div style={{
-        fontFamily: fontStack.display,
-        fontSize: 'clamp(28px, 4vw, 64px)',
-        fontWeight: 400, lineHeight: 1.15, letterSpacing: '-0.02em',
-        textAlign: 'center', maxWidth: 1100, margin: '0 auto',
-        marginBottom: 'clamp(32px, 4vh, 64px)',
-      }}>{question.question}</div>
-
-      {/* Trivia choices */}
-      {game === 'trivia' && question.choices && (
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: 12, maxWidth: 1000, margin: '0 auto' }}>
-          {question.choices.map((choice, i) => (
-            <button key={i} onClick={() => onHighlight(i)} style={{
-              textAlign: 'left', padding: '16px 20px', cursor: 'pointer',
-              background: highlighted === i ? T.bgAlt : 'transparent',
-              color: T.ink, border: `1.5px solid ${highlighted === i ? T.ink : T.lineFade}`,
-              fontFamily: fontStack.body, fontSize: 'clamp(14px, 1.8vw, 20px)',
-              transition: 'all 0.15s',
-            }}>
-              <span style={{ fontFamily: fontStack.mono, fontSize: 11, marginRight: 10, color: T.inkMute }}>
-                {['A', 'B', 'C', 'D'][i]}
-              </span>
-              {choice}
-            </button>
-          ))}
-        </div>
-      )}
-
-      {/* Wall grid */}
-      {game === 'wall' && question.items && (
         <div style={{
-          display: 'grid',
-          gridTemplateColumns: `repeat(${isMobile ? 2 : 4}, 1fr)`,
-          gap: 8, maxWidth: 1200, margin: '0 auto',
-        }}>
-          {question.items.map((item, i) => (
-            <div key={i} style={{
-              padding: '12px 14px', border: `1px solid ${T.lineFade}`,
-              fontFamily: fontStack.body, fontSize: 'clamp(13px, 1.4vw, 18px)',
-              textAlign: 'center',
-            }}>{item.label}</div>
-          ))}
+          fontFamily: fontStack.display,
+          fontSize: 'clamp(28px, 4vw, 64px)',
+          fontWeight: 400, lineHeight: 1.15, letterSpacing: '-0.02em',
+          maxWidth: 1100,
+        }}>{question.question}</div>
+
+        {game === 'trivia' && question.choices && (
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: 12, maxWidth: 1000, width: '100%' }}>
+            {question.choices.map((choice, i) => (
+              <button key={i} onClick={() => onHighlight(i)} style={{
+                textAlign: 'left', padding: '16px 20px', cursor: 'pointer',
+                background: highlighted === i ? T.bgAlt : 'transparent',
+                color: T.ink, border: `1.5px solid ${highlighted === i ? T.ink : T.lineFade}`,
+                fontFamily: fontStack.body, fontSize: 'clamp(14px, 1.8vw, 20px)',
+                transition: 'all 0.15s',
+              }}>
+                <span style={{ fontFamily: fontStack.mono, fontSize: 11, marginRight: 10, color: T.inkMute }}>
+                  {['A', 'B', 'C', 'D'][i]}
+                </span>
+                {choice}
+              </button>
+            ))}
+          </div>
+        )}
+
+        {game === 'wall' && question.items && (
+          <div style={{
+            display: 'grid',
+            gridTemplateColumns: `repeat(${isMobile ? 2 : 4}, 1fr)`,
+            gap: 8, maxWidth: 1200, width: '100%',
+          }}>
+            {question.items.map((item, i) => (
+              <div key={i} style={{
+                padding: '12px 14px', border: `1px solid ${T.lineFade}`,
+                fontFamily: fontStack.body, fontSize: 'clamp(13px, 1.4vw, 18px)',
+                textAlign: 'center',
+              }}>{item.label}</div>
+            ))}
+          </div>
+        )}
+
+        {game === 'closest' && question.unit && (
+          <div style={{ ...mono(13, { color: T.inkMute }) }}>Unit: {question.unit}</div>
+        )}
+      </div>
+
+      {/* Bottom action bar */}
+      <div style={{
+        display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 12,
+        marginTop: 'auto',
+      }}>
+        <Btn variant="ghost" onClick={onReveal}>Reveal →</Btn>
+        <div style={{ ...mono(11, { color: T.inkMute }) }}>
+          Space to reveal · 1–4 to highlight choices
         </div>
-      )}
-
-      {/* Closest — no input, just show question */}
-      {game === 'closest' && question.unit && (
-        <div style={{ textAlign: 'center', ...mono(13, { color: T.inkMute }) }}>Unit: {question.unit}</div>
-      )}
-
-      <div style={{ marginTop: 48, textAlign: 'center', ...mono(11, { color: T.inkMute }) }}>
-        Space to reveal · 1–4 to highlight choices
       </div>
     </div>
   );
@@ -362,101 +396,114 @@ function RevealDisplay({
   onScore: () => void;
 }) {
   return (
-    <div style={{ maxWidth: 1400, margin: '0 auto', padding: '32px clamp(16px, 4vw, 48px)' }}>
-      <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', marginBottom: 32, position: 'relative' }}>
-        <div style={{ display: 'flex', gap: 12, alignItems: 'center' }}>
+    <div style={{
+      flex: 1,
+      display: 'flex',
+      flexDirection: 'column',
+      maxWidth: 1400,
+      width: '100%',
+      margin: '0 auto',
+      padding: 'clamp(16px, 3vw, 32px) clamp(16px, 4vw, 48px)',
+    }}>
+      {/* Top banner */}
+      <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center' }}>
+        <div style={{ display: 'flex', gap: 12, alignItems: 'center', flexWrap: 'wrap', justifyContent: 'center' }}>
           <span style={{ fontFamily: fontStack.mono, fontSize: 11, letterSpacing: '0.2em', textTransform: 'uppercase', color: T.inkMute }}>
             Round {round}/{total}
           </span>
           <Tag color={T.accent}>{GAMES.find(g => g.key === game)?.title}</Tag>
           <Tag color={T.inkMute}>{category}</Tag>
         </div>
-        <div style={{ position: 'absolute', right: 0 }}>
-          <Btn variant="accent" onClick={onScore}>Score →</Btn>
-        </div>
       </div>
 
-      {question.imageUrl && (
-        <div style={{ marginBottom: 24, textAlign: 'center' }}>
+      {/* Centered content */}
+      <div style={{
+        flex: 1,
+        display: 'flex',
+        flexDirection: 'column',
+        justifyContent: 'center',
+        alignItems: 'center',
+        textAlign: 'center',
+        padding: 'clamp(24px, 4vw, 64px) 0',
+        gap: 'clamp(16px, 2.5vh, 32px)',
+      }}>
+        {question.imageUrl && (
           <img src={question.imageUrl} alt="question" style={{
-            display: 'block', margin: '0 auto',
-            maxHeight: 'clamp(160px, 24vw, 320px)', maxWidth: '100%',
+            display: 'block',
+            maxHeight: 'clamp(140px, 24vh, 320px)', maxWidth: '100%',
             border: `1px solid ${T.lineFade}`,
           }} />
-        </div>
-      )}
+        )}
 
-      <div style={{
-        fontFamily: fontStack.display, fontSize: 'clamp(22px, 3vw, 48px)',
-        fontWeight: 400, lineHeight: 1.15, letterSpacing: '-0.02em',
-        textAlign: 'center', maxWidth: 1100, margin: '0 auto 24px',
-      }}>{question.question}</div>
-
-      {/* Trivia answer */}
-      {game === 'trivia' && question.choices && question.correctIndex !== undefined && (
-        <div style={{ marginBottom: 20 }}>
-          <div style={{ ...mono(11, { color: T.inkMute, marginBottom: 10 }) }}>Answer</div>
-          <div style={{
-            padding: '16px 20px', background: T.correctBg,
-            border: `1.5px solid ${T.correct}`, display: 'inline-block',
-            fontFamily: fontStack.body, fontSize: 'clamp(16px, 2vw, 28px)', color: T.correct,
-          }}>
-            <span style={{ fontFamily: fontStack.mono, fontSize: 11, marginRight: 10 }}>
-              {['A', 'B', 'C', 'D'][question.correctIndex]}
-            </span>
-            {question.choices[question.correctIndex]}
-          </div>
-        </div>
-      )}
-
-      {/* Wall answer */}
-      {game === 'wall' && question.items && (
-        <div style={{ marginBottom: 20 }}>
-          <div style={{ ...mono(11, { color: T.inkMute, marginBottom: 10 }) }}>
-            The 8 correct items
-          </div>
-          <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
-            {question.items.filter(it => it.correct).map((it, i) => (
-              <span key={i} style={{
-                padding: '8px 14px', background: T.correctBg,
-                border: `1px solid ${T.correct}`, color: T.correct,
-                fontFamily: fontStack.body, fontSize: 'clamp(13px, 1.5vw, 18px)',
-              }}>{it.label}</span>
-            ))}
-          </div>
-          {question.explanation && (
-            <div style={{ marginTop: 12, color: T.inkMute, fontSize: 14, fontFamily: fontStack.body, maxWidth: 700 }}>
-              {question.explanation}
-            </div>
-          )}
-        </div>
-      )}
-
-      {/* Closest answer */}
-      {game === 'closest' && question.answer !== undefined && (
-        <div style={{ marginBottom: 20 }}>
-          <div style={{ ...mono(11, { color: T.inkMute, marginBottom: 10 }) }}>Answer</div>
-          <div style={{
-            fontFamily: fontStack.display, fontSize: 'clamp(36px, 5vw, 80px)',
-            fontWeight: 400, color: T.correct,
-          }}>
-            {question.answer.toLocaleString()} <span style={{ fontSize: '0.4em', color: T.inkMute }}>{question.unit}</span>
-          </div>
-        </div>
-      )}
-
-      {question.explanation && game !== 'wall' && (
         <div style={{
-          marginTop: 16, padding: '16px 20px', background: T.bgAlt,
-          border: `1px solid ${T.lineFade}`, color: T.inkSoft,
-          fontFamily: fontStack.body, fontSize: 'clamp(13px, 1.5vw, 17px)',
-          maxWidth: 700, lineHeight: 1.6,
-        }}>
-          {question.explanation}
-        </div>
-      )}
+          fontFamily: fontStack.display, fontSize: 'clamp(22px, 3vw, 48px)',
+          fontWeight: 400, lineHeight: 1.15, letterSpacing: '-0.02em',
+          maxWidth: 1100,
+        }}>{question.question}</div>
 
-      <div style={{ marginTop: 40, ...mono(11, { color: T.inkMute }) }}>Space to score</div>
+        {game === 'trivia' && question.choices && question.correctIndex !== undefined && (
+          <div>
+            <div style={{ ...mono(11, { color: T.inkMute, marginBottom: 10 }) }}>Answer</div>
+            <div style={{
+              padding: '16px 20px', background: T.correctBg,
+              border: `1.5px solid ${T.correct}`, display: 'inline-block',
+              fontFamily: fontStack.body, fontSize: 'clamp(16px, 2vw, 28px)', color: T.correct,
+            }}>
+              <span style={{ fontFamily: fontStack.mono, fontSize: 11, marginRight: 10 }}>
+                {['A', 'B', 'C', 'D'][question.correctIndex]}
+              </span>
+              {question.choices[question.correctIndex]}
+            </div>
+          </div>
+        )}
+
+        {game === 'wall' && question.items && (
+          <div>
+            <div style={{ ...mono(11, { color: T.inkMute, marginBottom: 10 }) }}>The 8 correct items</div>
+            <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, justifyContent: 'center' }}>
+              {question.items.filter(it => it.correct).map((it, i) => (
+                <span key={i} style={{
+                  padding: '8px 14px', background: T.correctBg,
+                  border: `1px solid ${T.correct}`, color: T.correct,
+                  fontFamily: fontStack.body, fontSize: 'clamp(13px, 1.5vw, 18px)',
+                }}>{it.label}</span>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {game === 'closest' && question.answer !== undefined && (
+          <div>
+            <div style={{ ...mono(11, { color: T.inkMute, marginBottom: 10 }) }}>Answer</div>
+            <div style={{
+              fontFamily: fontStack.display, fontSize: 'clamp(36px, 5vw, 80px)',
+              fontWeight: 400, color: T.correct,
+            }}>
+              {question.answer.toLocaleString()} <span style={{ fontSize: '0.4em', color: T.inkMute }}>{question.unit}</span>
+            </div>
+          </div>
+        )}
+
+        {question.explanation && (
+          <div style={{
+            padding: '16px 20px', background: T.bgAlt,
+            border: `1px solid ${T.lineFade}`, color: T.inkSoft,
+            fontFamily: fontStack.body, fontSize: 'clamp(13px, 1.5vw, 17px)',
+            maxWidth: 700, lineHeight: 1.6,
+          }}>
+            {question.explanation}
+          </div>
+        )}
+      </div>
+
+      {/* Bottom action bar */}
+      <div style={{
+        display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 12,
+        marginTop: 'auto',
+      }}>
+        <Btn variant="accent" onClick={onScore}>Score →</Btn>
+        <div style={{ ...mono(11, { color: T.inkMute }) }}>Space to score</div>
+      </div>
     </div>
   );
 }
@@ -477,11 +524,26 @@ function ScoringScreen({
   const setDelta = (id: string, val: number) => setDeltas(d => ({ ...d, [id]: val }));
 
   return (
-    <div style={{ maxWidth: 900, margin: '0 auto', padding: '32px clamp(16px, 4vw, 48px)' }}>
-      <div style={{ ...mono(11, { color: T.inkMute, marginBottom: 24 }) }}>
+    <div style={{
+      flex: 1,
+      display: 'flex',
+      flexDirection: 'column',
+      maxWidth: 900,
+      width: '100%',
+      margin: '0 auto',
+      padding: 'clamp(16px, 3vw, 32px) clamp(16px, 4vw, 48px)',
+    }}>
+      <div style={{ ...mono(11, { color: T.inkMute }) }}>
         § Score this round — {GAMES.find(g => g.key === game)?.title}
       </div>
 
+      <div style={{
+        flex: 1,
+        display: 'flex',
+        flexDirection: 'column',
+        justifyContent: 'center',
+        padding: 'clamp(24px, 4vh, 48px) 0',
+      }}>
       <div style={{ display: 'flex', flexDirection: 'column', gap: 0, border: `1px solid ${T.line}` }}>
         {players.map((p, idx) => (
           <div key={p.id} style={{
@@ -551,8 +613,9 @@ function ScoringScreen({
           </div>
         ))}
       </div>
+      </div>
 
-      <div style={{ marginTop: 32, display: 'flex', justifyContent: 'flex-end' }}>
+      <div style={{ marginTop: 'auto', display: 'flex', justifyContent: 'flex-end' }}>
         <Btn variant="accent" onClick={() => onDone(deltas)}>Next Round →</Btn>
       </div>
     </div>
@@ -637,14 +700,21 @@ export default function PresenterPage() {
     try {
       const recent = readRecentQuestions();
       const combined = [...new Set([...recent, ...past])].slice(-50);
+      const avoidWikiSubjects = readRecentWikiSubjects();
       const res = await fetch('/api/presenter-question', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ game: entry.game, category: entry.category, previousQuestions: combined }),
+        body: JSON.stringify({
+          game: entry.game,
+          category: entry.category,
+          previousQuestions: combined,
+          avoidWikiSubjects,
+        }),
       });
       const data = await res.json();
       if (data.error) throw new Error(data.error);
       appendRecentQuestion(data.question.slice(0, 80));
+      if (data.wikiQuery) appendRecentWikiSubject(data.wikiQuery);
       setQuestion(data);
       setHighlighted(null);
       setPhase('displaying');
@@ -725,10 +795,11 @@ export default function PresenterPage() {
   return (
     <Shell hideHeader>
       <div style={{
-        minHeight: '100vh',
+        minHeight: '100dvh',
         position: 'relative',
-        paddingTop: 'env(safe-area-inset-top)',
-        paddingBottom: 'env(safe-area-inset-bottom)',
+        display: 'flex',
+        flexDirection: 'column',
+        flex: 1,
       }}>
         {/* Quit confirm overlay */}
         {showQuit && (
@@ -752,7 +823,12 @@ export default function PresenterPage() {
         )}
 
         {phase === 'loading' && (
-          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', minHeight: '80vh' }}>
+          <div style={{
+            flex: 1,
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+          }}>
             <div style={{ fontFamily: fontStack.display, fontSize: 48, opacity: 0.4, letterSpacing: '-0.02em' }}>
               Generating…
             </div>
