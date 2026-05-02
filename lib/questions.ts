@@ -3,25 +3,19 @@ import { fetchWikiImage } from '@/lib/wiki';
 
 const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
 
-const OVERUSED_SUBJECTS = [
-  'Mona Lisa', 'Eiffel Tower', 'Big Ben', 'Statue of Liberty',
-  'Mount Everest', 'Mount Fuji', 'Taj Mahal', 'Pyramids of Giza',
-  'Colosseum', 'Great Wall of China', 'Sydney Opera House',
-  'Christ the Redeemer', 'Parthenon', 'Stonehenge', 'Machu Picchu',
-  'Komodo dragon',
-];
-
-function buildAvoidWikiClause(avoidWikiSubjects: string[]) {
-  const all = [...new Set([...OVERUSED_SUBJECTS, ...avoidWikiSubjects])];
-  return all.length
-    ? `\n\nHARD RULE — wikiQuery MUST NOT be any of these (already used or top-tier clichés): ${all.join('; ')}.`
+function buildAvoidQuestionsClause(previousQuestions: string[]) {
+  return previousQuestions.length
+    ? `\n\nDo not repeat any of these already-asked questions from this session: ${previousQuestions.slice(-15).join('; ')}`
     : '';
 }
 
-export function buildTriviaFallbackPrompt(category: string, previousQuestions: string[]) {
-  const avoid = previousQuestions.length
-    ? `\n\nStrictly AVOID repeating these already-asked topics: ${previousQuestions.slice(-15).join('; ')}`
+function buildAvoidWikiClause(avoidWikiSubjects: string[]) {
+  return avoidWikiSubjects.length
+    ? `\n\nDo not pick a wikiQuery for any subject already used in this session: ${avoidWikiSubjects.slice(-30).join('; ')}.`
     : '';
+}
+
+export function buildTriviaTextPrompt(category: string, previousQuestions: string[]) {
   return `Generate ONE text-only trivia question from the broad category "${category}".
 - Vary the difficulty randomly (easy / medium / hard)
 - Be culturally diverse — not US-centric
@@ -35,41 +29,22 @@ Respond ONLY with valid JSON, no markdown, no preamble:
   "correctIndex": 0,
   "explanation": "1-2 sentence fun fact",
   "wikiQuery": null
-}${avoid}`;
+}${buildAvoidQuestionsClause(previousQuestions)}`;
 }
 
-export function buildPrompt(
-  game: string,
+export function buildTriviaImagePrompt(
   category: string,
   previousQuestions: string[],
-  avoidWikiSubjects: string[] = [],
+  avoidWikiSubjects: string[],
 ) {
-  const avoid = previousQuestions.length
-    ? `\n\nStrictly AVOID repeating these already-asked topics/criteria: ${previousQuestions.slice(-15).join('; ')}`
-    : '';
-  const avoidWiki = buildAvoidWikiClause(avoidWikiSubjects);
-
-  if (game === 'trivia') {
-    return `Generate ONE trivia question from the broad category "${category}".
+  return `Generate ONE image-first trivia question from the broad category "${category}".
 - Vary the difficulty randomly (easy / medium / hard)
 - Be culturally diverse — not US-centric
-
-IMAGE-FIRST RULE (use ~30% of the time):
-When the answer is something visually iconic — a famous person, landmark, painting, flag, animal, dish, building, logo, album cover — generate an IMAGE-FIRST question where the image carries all the information.
-For image-first questions:
-  • Set "imageFirst": true
-  • The question text MUST be one of these forms (or closely similar): "Who is this?", "Where is this?", "What is this?", "Which [country/painting/animal/dish] is this?", "Whose work is this?", "What is this landmark called?", "In which country is this located?"
-  • The question text MUST NOT name, describe, hint at, or paraphrase the subject — the image carries that
-  • Set "wikiQuery" to the EXACT Wikipedia article title of the subject shown (e.g. "Margherita pizza", "Frida Kahlo")
-  • The four choices are the candidate answers
-
-CANDIDATE-POOL RULE for image-first:
-For image-first questions, BEFORE choosing a wikiQuery, mentally generate a list of 20+ candidate subjects across many categories (animals, plants, dishes, paintings, sculptures, buildings, landmarks, vehicles, logos, flags, historical figures, scientists, athletes, fictional characters, natural phenomena, geological features, instruments, tools, clothing items, currencies). Then pick the FIRST one that does NOT appear in the avoidWikiSubjects list and is NOT a top-tier cliché. The wikiQuery you return MUST be specific (a Wikipedia article title, not a category).
-
-TEXT-ONLY RULE (use ~70% of the time):
-  • Set "imageFirst": false
-  • Set "wikiQuery": null
-  • Write a complete self-contained text question as normal
+- The image carries all the information; the question text MUST NOT name, describe, hint at, or paraphrase the subject.
+- The question text should be one of: "Who is this?", "Where is this?", "What is this?", "Which [country/painting/animal/dish] is this?", "Whose work is this?", "What is this landmark called?", "In which country is this located?"
+- Pick any subject likely to have a Wikipedia article OR a Wikimedia Commons image — people, places, landmarks, animals, artworks, objects, historical events, dishes, plants, vehicles, flags, logos, etc. Choose freely; well-known subjects are fine.
+- Set "wikiQuery" to the EXACT Wikipedia article title (or a Commons-friendly subject name) of what's pictured.
+- The four choices are the candidate answers.
 
 Respond ONLY with valid JSON, no markdown, no preamble:
 {
@@ -79,9 +54,23 @@ Respond ONLY with valid JSON, no markdown, no preamble:
   "correctIndex": 0,
   "explanation": "1-2 sentence fun fact",
   "wikiQuery": "exact Wikipedia article title"
+}${buildAvoidQuestionsClause(previousQuestions)}${buildAvoidWikiClause(avoidWikiSubjects)}`;
 }
-(or "imageFirst": false, "wikiQuery": null for text questions)${avoid}${avoidWiki}`;
+
+export function buildPrompt(
+  game: string,
+  category: string,
+  previousQuestions: string[],
+  avoidWikiSubjects: string[] = [],
+  isImageQuestion = false,
+) {
+  if (game === 'trivia') {
+    return isImageQuestion
+      ? buildTriviaImagePrompt(category, previousQuestions, avoidWikiSubjects)
+      : buildTriviaTextPrompt(category, previousQuestions);
   }
+
+  const avoid = buildAvoidQuestionsClause(previousQuestions);
 
   if (game === 'wall') {
     return `Create ONE "wall" challenge for the broad category "${category}".
@@ -136,8 +125,11 @@ export async function generateQuestion(
   category: string,
   previousQuestions: string[],
   avoidWikiSubjects: string[] = [],
+  isImageQuestion = false,
 ): Promise<any> {
-  const data = await callClaude(buildPrompt(game, category, previousQuestions, avoidWikiSubjects));
+  const data = await callClaude(
+    buildPrompt(game, category, previousQuestions, avoidWikiSubjects, isImageQuestion),
+  );
 
   if (game === 'wall' && Array.isArray(data.items)) {
     data.items = data.items
@@ -147,22 +139,15 @@ export async function generateQuestion(
   }
 
   if (game === 'trivia' && data.imageFirst && data.wikiQuery) {
-    const banned = new Set(avoidWikiSubjects.map(s => s.toLowerCase()));
-    if (banned.has(String(data.wikiQuery).toLowerCase())) {
-      try {
-        return await callClaude(buildTriviaFallbackPrompt(category, previousQuestions));
-      } catch {
-        // fall through and try the wiki image
-      }
-    }
     const imageUrl = await fetchWikiImage(data.wikiQuery);
     if (imageUrl) {
       data.imageUrl = imageUrl;
     } else {
+      // Both Wikipedia and Commons failed — fall back to a fresh text-only trivia question.
       try {
-        return await callClaude(buildTriviaFallbackPrompt(category, previousQuestions));
+        return await callClaude(buildTriviaTextPrompt(category, previousQuestions));
       } catch {
-        // play original without image
+        // keep the original payload but without an image
       }
     }
   }

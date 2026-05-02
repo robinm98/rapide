@@ -16,6 +16,7 @@ interface Player {
 interface RoundEntry {
   game: GameType;
   category: string;
+  isImageQuestion?: boolean;
 }
 
 interface Question {
@@ -61,6 +62,20 @@ function buildQueue(games: GameType[], categories: string[], roundsPerGame: numb
   for (const game of games) {
     for (let i = 0; i < roundsPerGame; i++) {
       entries.push({ game, category: pickOne(categories) });
+    }
+  }
+  // Pre-decide which trivia rounds are image-first: exactly Math.round(N * 0.3) of them, at random indices.
+  const triviaIndices: number[] = [];
+  entries.forEach((e, i) => { if (e.game === 'trivia') triviaIndices.push(i); });
+  const imageCount = Math.round(triviaIndices.length * 0.3);
+  if (imageCount > 0) {
+    const shuffled = triviaIndices
+      .map(i => ({ i, k: Math.random() }))
+      .sort((a, b) => a.k - b.k)
+      .map(o => o.i);
+    const imageSet = new Set(shuffled.slice(0, imageCount));
+    for (let i = 0; i < entries.length; i++) {
+      if (imageSet.has(i)) entries[i].isImageQuestion = true;
     }
   }
   return entries;
@@ -379,7 +394,7 @@ function QuestionDisplay({
         marginTop: 'auto',
       }}>
         <Btn variant="ghost" onClick={onReveal}>Reveal →</Btn>
-        <div style={{ ...mono(11, { color: T.inkMute }) }}>
+        <div className="kbd-hint" style={{ ...mono(11, { color: T.inkMute }) }}>
           Space to reveal · 1–4 to highlight choices
         </div>
       </div>
@@ -502,7 +517,7 @@ function RevealDisplay({
         marginTop: 'auto',
       }}>
         <Btn variant="accent" onClick={onScore}>Score →</Btn>
-        <div style={{ ...mono(11, { color: T.inkMute }) }}>Space to score</div>
+        <div className="kbd-hint" style={{ ...mono(11, { color: T.inkMute }) }}>Space to score</div>
       </div>
     </div>
   );
@@ -708,6 +723,7 @@ export default function PresenterPage() {
           category: entry.category,
           previousQuestions: combined,
           avoidWikiSubjects,
+          isImageQuestion: !!entry.isImageQuestion,
         }),
       });
       const data = await res.json();
@@ -878,7 +894,7 @@ export default function PresenterPage() {
 
         {/* Esc hint */}
         {phase !== 'loading' && (
-          <div style={{
+          <div className="kbd-hint" style={{
             position: 'fixed', bottom: 16, right: 24,
             ...mono(10, { color: T.inkMute }),
           }}>

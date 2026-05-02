@@ -13,6 +13,22 @@ function genCode() {
   return Array.from({ length: 4 }, () => chars[Math.floor(Math.random() * chars.length)]).join('');
 }
 
+type QueueEntry = { game: string; category: string; isImageQuestion?: boolean };
+
+// Mark ~30% of trivia rounds as image-first, distributed at random indices.
+function assignImageQuestions(queue: QueueEntry[]): QueueEntry[] {
+  const triviaIndices: number[] = [];
+  queue.forEach((e, i) => { if (e.game === 'trivia') triviaIndices.push(i); });
+  const imageCount = Math.round(triviaIndices.length * 0.3);
+  if (imageCount === 0) return queue.map(e => ({ ...e, isImageQuestion: false }));
+  const shuffled = triviaIndices
+    .map(i => ({ i, k: Math.random() }))
+    .sort((a, b) => a.k - b.k)
+    .map(o => o.i);
+  const imageSet = new Set(shuffled.slice(0, imageCount));
+  return queue.map((e, i) => ({ ...e, isImageQuestion: imageSet.has(i) }));
+}
+
 export async function POST(req: Request) {
   try {
     const body = await req.json();
@@ -71,14 +87,23 @@ export async function POST(req: Request) {
       if (!room) return NextResponse.json({ error: 'Room not found' }, { status: 404 });
       if (room.host_id !== playerId) return NextResponse.json({ error: 'Only host can start' }, { status: 403 });
 
-      const queue: { game: string; category: string }[] = [];
+      const baseQueue: QueueEntry[] = [];
       for (const g of room.config.games) {
         for (let i = 0; i < room.config.rounds; i++) {
-          queue.push({ game: g, category: pickOne<string>(room.config.categories) });
+          baseQueue.push({ game: g, category: pickOne<string>(room.config.categories) });
         }
       }
+      const queue = assignImageQuestions(baseQueue);
       const first = queue[0];
-      const question = await generateQuestion(first.game as any, first.category, []);
+      const question = await generateQuestion(
+        first.game as any,
+        first.category,
+        [],
+        [],
+        !!first.isImageQuestion,
+      );
+
+      const pastWikiSubjects = question.wikiQuery ? [question.wikiQuery] : [];
 
       const state = {
         phase: 'answering',
@@ -90,6 +115,7 @@ export async function POST(req: Request) {
         answers: {},
         wallPicks: {},
         pastQuestions: [question.question.slice(0, 80)],
+        pastWikiSubjects,
       };
       const { error } = await supabaseAdmin.from('rooms').update({ state }).eq('code', code);
       if (error) throw error;
@@ -162,7 +188,7 @@ export async function POST(req: Request) {
       if (room.host_id !== playerId) return NextResponse.json({ error: 'Only host can advance' }, { status: 403 });
 
       const { state } = room;
-      const queue: { game: string; category: string }[] = state.queue ?? [];
+      const queue: QueueEntry[] = state.queue ?? [];
       const nextIndex = (state.queueIndex ?? 0) + 1;
 
       if (nextIndex >= queue.length) {
@@ -172,7 +198,18 @@ export async function POST(req: Request) {
       }
 
       const entry = queue[nextIndex];
-      const question = await generateQuestion(entry.game as any, entry.category, state.pastQuestions ?? []);
+      const prevWiki: string[] = state.pastWikiSubjects ?? [];
+      const question = await generateQuestion(
+        entry.game as any,
+        entry.category,
+        state.pastQuestions ?? [],
+        prevWiki,
+        !!entry.isImageQuestion,
+      );
+
+      const nextWikiSubjects = question.wikiQuery
+        ? [...prevWiki, question.wikiQuery]
+        : prevWiki;
 
       const newState = {
         ...state,
@@ -184,6 +221,7 @@ export async function POST(req: Request) {
         answers: {},
         wallPicks: {},
         pastQuestions: [...(state.pastQuestions ?? []), question.question.slice(0, 80)],
+        pastWikiSubjects: nextWikiSubjects,
       };
       const { error } = await supabaseAdmin.from('rooms').update({ state: newState }).eq('code', code);
       if (error) throw error;
