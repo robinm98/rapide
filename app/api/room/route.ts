@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server';
 import { supabaseAdmin } from '@/lib/supabase-admin';
-import { generateQuestion } from '@/lib/questions';
+import { generateQuestion, type TriviaKind } from '@/lib/questions';
 
 export const runtime = 'nodejs';
 
@@ -13,20 +13,43 @@ function genCode() {
   return Array.from({ length: 4 }, () => chars[Math.floor(Math.random() * chars.length)]).join('');
 }
 
-type QueueEntry = { game: string; category: string; isImageQuestion?: boolean };
+type QueueEntry = { game: string; category: string; triviaKind?: TriviaKind };
 
-// Mark ~30% of trivia rounds as image-first, distributed at random indices.
-function assignImageQuestions(queue: QueueEntry[]): QueueEntry[] {
+// For each trivia round, pick a kind: 25% image / 50% text / 25% ranking, distributed at random indices.
+function assignTriviaKinds(queue: QueueEntry[]): QueueEntry[] {
   const triviaIndices: number[] = [];
   queue.forEach((e, i) => { if (e.game === 'trivia') triviaIndices.push(i); });
-  const imageCount = Math.round(triviaIndices.length * 0.3);
-  if (imageCount === 0) return queue.map(e => ({ ...e, isImageQuestion: false }));
+  const total = triviaIndices.length;
+  if (total === 0) return queue;
+
+  const imageCount = Math.round(total * 0.25);
+  const rankingCount = Math.round(total * 0.25);
+
   const shuffled = triviaIndices
     .map(i => ({ i, k: Math.random() }))
     .sort((a, b) => a.k - b.k)
     .map(o => o.i);
+
   const imageSet = new Set(shuffled.slice(0, imageCount));
-  return queue.map((e, i) => ({ ...e, isImageQuestion: imageSet.has(i) }));
+  const rankingSet = new Set(shuffled.slice(imageCount, imageCount + rankingCount));
+
+  return queue.map((e, i) => {
+    if (e.game !== 'trivia') return e;
+    const kind: TriviaKind = imageSet.has(i) ? 'image' : rankingSet.has(i) ? 'ranking' : 'text';
+    return { ...e, triviaKind: kind };
+  });
+}
+
+function rankingSubjectKey(question: any): string | null {
+  if (question?.kind !== 'ranking' || !Array.isArray(question.items)) return null;
+  return [...question.items].sort().join('|');
+}
+
+function appendWikiTracker(question: any, prev: string[]): string[] {
+  if (question?.wikiQuery) return [...prev, question.wikiQuery];
+  const r = rankingSubjectKey(question);
+  if (r) return [...prev, r];
+  return prev;
 }
 
 export async function POST(req: Request) {
@@ -93,17 +116,17 @@ export async function POST(req: Request) {
           baseQueue.push({ game: g, category: pickOne<string>(room.config.categories) });
         }
       }
-      const queue = assignImageQuestions(baseQueue);
+      const queue = assignTriviaKinds(baseQueue);
       const first = queue[0];
       const question = await generateQuestion(
         first.game as any,
         first.category,
         [],
         [],
-        !!first.isImageQuestion,
+        first.triviaKind ?? 'text',
       );
 
-      const pastWikiSubjects = question.wikiQuery ? [question.wikiQuery] : [];
+      const pastWikiSubjects = appendWikiTracker(question, []);
 
       const state = {
         phase: 'answering',
@@ -151,7 +174,18 @@ export async function POST(req: Request) {
       const currentGame = state.currentGame;
       let newPlayers = [...players];
 
-      if (currentGame === 'trivia') {
+      if (currentGame === 'trivia' && q?.kind === 'ranking') {
+        const correct: number[] = q.correctOrder ?? [];
+        newPlayers = players.map((p: any) => {
+          const a = state.answers[p.id];
+          if (!Array.isArray(a)) return p;
+          let matches = 0;
+          for (let i = 0; i < correct.length; i++) {
+            if (a[i] === correct[i]) matches++;
+          }
+          return { ...p, score: p.score + matches * 2 };
+        });
+      } else if (currentGame === 'trivia') {
         newPlayers = players.map((p: any) => {
           const a = state.answers[p.id];
           return a === q.correctIndex ? { ...p, score: p.score + 8 } : p;
@@ -204,12 +238,10 @@ export async function POST(req: Request) {
         entry.category,
         state.pastQuestions ?? [],
         prevWiki,
-        !!entry.isImageQuestion,
+        entry.triviaKind ?? 'text',
       );
 
-      const nextWikiSubjects = question.wikiQuery
-        ? [...prevWiki, question.wikiQuery]
-        : prevWiki;
+      const nextWikiSubjects = appendWikiTracker(question, prevWiki);
 
       const newState = {
         ...state,
