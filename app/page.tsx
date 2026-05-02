@@ -128,10 +128,9 @@ export default function Home() {
               { key: 'join', num: '02', title: 'Join a Room', desc: 'Someone sent you a code? Enter it and hop in.', tag: 'Guest', href: null },
               { key: 'presenter', num: '03', title: 'Around the Table', desc: 'No phones needed. One screen, paper scoring, everyone together.', tag: 'In Person', href: '/presenter' },
             ].map((m, i) => {
-              const isLast = i === 2;
               const style: React.CSSProperties = {
                 background: 'transparent', border: 'none', cursor: 'pointer',
-                borderRight: !isLast ? `1px solid ${T.line}` : 'none',
+                borderRight: `1px solid ${T.line}`,
                 borderBottom: `1px solid ${T.line}`,
                 padding: '48px clamp(16px, 4vw, 32px)', textAlign: 'left', color: T.ink,
                 transition: 'background 0.2s', display: 'block', width: '100%',
@@ -175,13 +174,8 @@ export default function Home() {
 
   if (view === 'join') {
     return (
-      <Shell>
+      <Shell showHome onHomeClick={() => { setView('home'); setError(''); }}>
         <main style={{ maxWidth: 560, margin: '0 auto', padding: '48px clamp(16px, 4vw, 32px)' }}>
-          <button onClick={() => setView('home')} style={{
-            background: 'none', border: 'none', color: T.inkMute, cursor: 'pointer',
-            fontFamily: fontStack.mono, fontSize: 11, letterSpacing: '0.15em',
-            textTransform: 'uppercase', padding: 0, marginBottom: 32,
-          }}>← Back</button>
           <Tag color={T.accent}>Join a Room</Tag>
           <h1 style={{ fontFamily: fontStack.display, fontSize: 56, fontWeight: 400, margin: '16px 0 40px', letterSpacing: '-0.02em' }}>
             Enter the code.
@@ -203,13 +197,8 @@ export default function Home() {
 
   // Create view
   return (
-    <Shell>
+    <Shell showHome onHomeClick={() => { setView('home'); setError(''); }}>
       <main style={{ maxWidth: 900, margin: '0 auto', padding: '48px clamp(16px, 4vw, 32px)' }}>
-        <button onClick={() => setView('home')} style={{
-          background: 'none', border: 'none', color: T.inkMute, cursor: 'pointer',
-          fontFamily: fontStack.mono, fontSize: 11, letterSpacing: '0.15em',
-          textTransform: 'uppercase', padding: 0, marginBottom: 32,
-        }}>← Back</button>
         <Tag color={T.accent}>Host a Room</Tag>
         <h1 style={{ fontFamily: fontStack.display, fontSize: 56, fontWeight: 400, margin: '16px 0 40px', letterSpacing: '-0.02em' }}>
           Prepare the table.
