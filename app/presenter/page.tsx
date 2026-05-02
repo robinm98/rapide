@@ -624,8 +624,8 @@ function ScoringScreen({
 
 // ─── Results Screen ───────────────────────────────────────────────────────────
 
-function ResultsScreen({ players, onNewGame, onHome }: {
-  players: Player[]; onNewGame: () => void; onHome: () => void;
+function ResultsScreen({ players, onNewGame }: {
+  players: Player[]; onNewGame: () => void;
 }) {
   const sorted = [...players].sort((a, b) => b.score - a.score);
   const winner = sorted[0];
@@ -664,7 +664,6 @@ function ResultsScreen({ players, onNewGame, onHome }: {
 
       <div style={{ display: 'flex', justifyContent: 'center', gap: 16 }}>
         <Btn variant="accent" onClick={onNewGame}>New Game →</Btn>
-        <Btn variant="ghost" onClick={onHome}>← Home</Btn>
       </div>
     </div>
   );
@@ -782,18 +781,17 @@ export default function PresenterPage() {
 
   if (phase === 'results') {
     return (
-      <Shell hideHeader>
+      <Shell>
         <ResultsScreen
           players={players}
           onNewGame={() => setPhase('setup')}
-          onHome={() => { window.location.href = '/'; }}
         />
       </Shell>
     );
   }
 
   return (
-    <Shell hideHeader>
+    <Shell confirmLeave>
       <div style={{
         minHeight: '100dvh',
         position: 'relative',

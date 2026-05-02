@@ -98,7 +98,6 @@ export default function RoomPage({ params }: { params: { code: string } }) {
         <main style={{ padding: '120px clamp(16px, 4vw, 32px)', textAlign: 'center' }}>
           <Tag color={T.wrong}>Error</Tag>
           <div style={{ fontFamily: fontStack.display, fontSize: 32, margin: '16px 0 24px' }}>{error || 'Something went wrong'}</div>
-          <Btn onClick={() => router.push('/')}>Back home</Btn>
         </main>
       </Shell>
     );
@@ -211,7 +210,7 @@ export default function RoomPage({ params }: { params: { code: string } }) {
   const everyoneAnswered = answerCount === room.players.length;
 
   return (
-    <Shell>
+    <Shell confirmLeave>
       <main style={{ maxWidth: 1100, margin: '0 auto', padding: 'clamp(16px, 4vw, 32px)' }}>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 32, paddingBottom: 20, borderBottom: `1px solid ${T.lineFade}`, flexWrap: 'wrap', gap: 12 }}>
           <div style={{ fontFamily: fontStack.mono, fontSize: 11, color: T.inkMute, letterSpacing: '0.15em', textTransform: 'uppercase' }}>

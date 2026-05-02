@@ -70,10 +70,26 @@ const HomeButton = ({ onClick }: { onClick: () => void }) => (
   </button>
 );
 
-export const Shell = ({ children, hideHeader }: any) => {
+type ShellProps = {
+  children?: React.ReactNode;
+  hideHeader?: boolean;
+  showHome?: boolean;
+  onHomeClick?: () => void;
+  confirmLeave?: boolean;
+};
+
+export const Shell = ({ children, hideHeader, showHome, onHomeClick, confirmLeave }: ShellProps) => {
   const router = useRouter();
   const pathname = usePathname();
-  const showHome = pathname !== '/';
+  const resolvedShowHome = showHome ?? (pathname !== '/');
+  const goHome = () => {
+    if (confirmLeave && typeof window !== 'undefined'
+        && !window.confirm('Leave the game? Your progress will be lost.')) {
+      return;
+    }
+    if (onHomeClick) onHomeClick();
+    else router.push('/');
+  };
   return (
     <div className="shell-root" style={{
       display: 'flex',
@@ -95,7 +111,7 @@ export const Shell = ({ children, hideHeader }: any) => {
           gap: 12,
         }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: 12, minWidth: 0, flexShrink: 1 }}>
-            {showHome && <HomeButton onClick={() => router.push('/')} />}
+            {resolvedShowHome && <HomeButton onClick={goHome} />}
             <div
               onClick={() => router.push('/')}
               style={{ display: 'flex', alignItems: 'baseline', gap: 14, cursor: 'pointer', minWidth: 0 }}
