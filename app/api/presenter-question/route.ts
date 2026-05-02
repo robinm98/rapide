@@ -10,7 +10,7 @@ export async function POST(req: Request) {
       category,
       previousQuestions = [],
       avoidWikiSubjects = [],
-      isImageQuestion = false,
+      triviaKind = 'text',
     } = await req.json();
     if (!game || !category) {
       return NextResponse.json({ error: 'game and category required' }, { status: 400 });
@@ -20,7 +20,7 @@ export async function POST(req: Request) {
       category,
       previousQuestions,
       avoidWikiSubjects,
-      isImageQuestion,
+      triviaKind,
     );
     return NextResponse.json(question);
   } catch (err: any) {

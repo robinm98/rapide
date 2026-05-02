@@ -29,6 +29,7 @@ export default function RoomPage({ params }: { params: { code: string } }) {
   const [error, setError] = useState('');
   const [myWallPicks, setMyWallPicks] = useState<number[]>([]);
   const [closestInput, setClosestInput] = useState('');
+  const [myRanks, setMyRanks] = useState<(number | null)[]>([null, null, null, null]);
   const [submitting, setSubmitting] = useState(false);
   const [isMobile, setIsMobile] = useState(false);
 
@@ -61,6 +62,7 @@ export default function RoomPage({ params }: { params: { code: string } }) {
           if ((payload.new as any).state?.phase === 'answering') {
             setMyWallPicks([]);
             setClosestInput('');
+            setMyRanks([null, null, null, null]);
           }
         })
       .subscribe();
@@ -146,8 +148,8 @@ export default function RoomPage({ params }: { params: { code: string } }) {
 
           <div style={{ marginTop: 40, textAlign: 'center' }}>
             {isHost ? (
-              <Btn variant="accent" onClick={() => callAPI('start')} disabled={room.players.length < 2 || submitting}>
-                {submitting ? 'Starting…' : room.players.length < 2 ? 'Need at least 2 players' : 'Start the Game →'}
+              <Btn variant="accent" onClick={() => callAPI('start')} disabled={room.players.length < 1 || submitting}>
+                {submitting ? 'Starting…' : 'Start the Game →'}
               </Btn>
             ) : (
               <div style={{ fontFamily: fontStack.display, fontSize: 20, fontStyle: 'italic', color: T.inkSoft }}>
@@ -251,6 +253,7 @@ export default function RoomPage({ params }: { params: { code: string } }) {
             marginBottom: 20,
           }}>
             Round {(state.queueIndex ?? 0) + 1} · {gameLabel(currentGame)}
+            {currentGame === 'trivia' && q.kind === 'ranking' && ' · RANKING'}
           </div>
 
           {q.imageUrl && (
@@ -284,8 +287,8 @@ export default function RoomPage({ params }: { params: { code: string } }) {
           )}
         </div>
 
-        {/* TRIVIA */}
-        {currentGame === 'trivia' && (
+        {/* TRIVIA — choice (text/image) */}
+        {currentGame === 'trivia' && q.kind !== 'ranking' && (
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))', gap: 12 }}>
             {q.choices.map((choice: string, idx: number) => {
               const isCorrect = idx === q.correctIndex;
@@ -323,6 +326,107 @@ export default function RoomPage({ params }: { params: { code: string } }) {
             })}
           </div>
         )}
+
+        {/* TRIVIA — ranking */}
+        {currentGame === 'trivia' && q.kind === 'ranking' && (() => {
+          const items: string[] = q.items ?? [];
+          const correctOrder: number[] = q.correctOrder ?? [];
+          const canTap = state.phase === 'answering' && !iAnswered;
+
+          const tap = (idx: number) => {
+            if (!canTap) return;
+            setMyRanks(prev => {
+              const cur = prev[idx];
+              if (cur !== null) {
+                return prev.map((r, i) => i === idx ? null : (r !== null && r > cur ? r - 1 : r));
+              }
+              const used = prev.filter(r => r !== null) as number[];
+              const next = used.length + 1;
+              if (next > 4) return prev;
+              return prev.map((r, i) => i === idx ? next : r);
+            });
+          };
+
+          const allRanked = myRanks.every(r => r !== null);
+          const submit = () => {
+            const order = [1, 2, 3, 4].map(rank => myRanks.indexOf(rank));
+            callAPI('answer', { answer: order });
+          };
+
+          return (
+            <>
+              {state.phase === 'answering' && (
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                  {items.map((item, idx) => {
+                    const rank = myRanks[idx];
+                    const ranked = rank !== null;
+                    return (
+                      <button
+                        key={idx}
+                        disabled={!canTap}
+                        onClick={() => tap(idx)}
+                        style={{
+                          display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+                          padding: '18px 20px', cursor: canTap ? 'pointer' : 'default',
+                          background: 'transparent', color: T.ink,
+                          border: `1.5px solid ${ranked ? T.ink : T.lineFade}`,
+                          fontFamily: fontStack.body, fontSize: 17, textAlign: 'left',
+                          minHeight: isMobile ? 64 : undefined,
+                        }}
+                      >
+                        <span style={{ flex: 1 }}>{item}</span>
+                        <span style={{
+                          fontFamily: fontStack.mono, fontSize: 13, letterSpacing: '0.15em',
+                          color: ranked ? T.accent : T.inkMute,
+                          minWidth: 32, textAlign: 'right',
+                        }}>
+                          {ranked ? String(rank).padStart(2, '0') : '—'}
+                        </span>
+                      </button>
+                    );
+                  })}
+                  {!iAnswered && (
+                    <div style={{ marginTop: 12, display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 12, flexWrap: 'wrap' }}>
+                      <div style={{ fontFamily: fontStack.mono, fontSize: 11, color: T.inkMute }}>
+                        Tap to rank · {myRanks.filter(r => r !== null).length} / 4
+                      </div>
+                      <Btn onClick={submit} disabled={!allRanked || submitting}>
+                        Lock in ranking
+                      </Btn>
+                    </div>
+                  )}
+                  {iAnswered && (
+                    <div style={{ marginTop: 12, padding: 16, background: T.bgAlt, fontFamily: fontStack.mono, fontSize: 12, textAlign: 'center', color: T.inkSoft }}>
+                      Your ranking is locked in. Waiting for others…
+                    </div>
+                  )}
+                </div>
+              )}
+              {state.phase === 'revealing' && (
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                  <div style={{ fontFamily: fontStack.mono, fontSize: 11, color: T.inkMute, letterSpacing: '0.2em', marginBottom: 4 }}>
+                    Correct order
+                  </div>
+                  {correctOrder.map((itemIdx, rankIdx) => (
+                    <div key={rankIdx} style={{
+                      display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+                      padding: '16px 20px', background: T.correctBg,
+                      border: `1px solid ${T.correct}`, color: T.correct,
+                      fontFamily: fontStack.body, fontSize: 17,
+                    }}>
+                      <span style={{ display: 'flex', gap: 16, alignItems: 'baseline' }}>
+                        <span style={{ fontFamily: fontStack.mono, fontSize: 11, letterSpacing: '0.15em' }}>
+                          {String(rankIdx + 1).padStart(2, '0')}
+                        </span>
+                        <span>{items[itemIdx]}</span>
+                      </span>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </>
+          );
+        })()}
 
         {/* WALL */}
         {currentGame === 'wall' && (

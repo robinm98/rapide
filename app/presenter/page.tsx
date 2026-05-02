@@ -6,6 +6,7 @@ import { T, fontStack } from '@/lib/design';
 // ─── Types ────────────────────────────────────────────────────────────────────
 
 type GameType = 'trivia' | 'wall' | 'closest';
+type TriviaKind = 'text' | 'image' | 'ranking';
 
 interface Player {
   id: string;
@@ -16,7 +17,7 @@ interface Player {
 interface RoundEntry {
   game: GameType;
   category: string;
-  isImageQuestion?: boolean;
+  triviaKind?: TriviaKind;
 }
 
 interface Question {
@@ -26,10 +27,15 @@ interface Question {
   choices?: string[];
   correctIndex?: number;
   explanation?: string;
-  items?: { label: string; correct: boolean }[];
+  // wall
+  items?: any[];
   criterion?: string;
+  // closest
   answer?: number;
   unit?: string;
+  // ranking
+  kind?: 'ranking';
+  correctOrder?: number[];
 }
 
 type Phase = 'setup' | 'loading' | 'displaying' | 'revealing' | 'scoring' | 'results';
@@ -64,18 +70,22 @@ function buildQueue(games: GameType[], categories: string[], roundsPerGame: numb
       entries.push({ game, category: pickOne(categories) });
     }
   }
-  // Pre-decide which trivia rounds are image-first: exactly Math.round(N * 0.3) of them, at random indices.
+  // For each trivia round, pre-decide its kind: 25% image, 50% text, 25% ranking, at random indices.
   const triviaIndices: number[] = [];
   entries.forEach((e, i) => { if (e.game === 'trivia') triviaIndices.push(i); });
-  const imageCount = Math.round(triviaIndices.length * 0.3);
-  if (imageCount > 0) {
+  const total = triviaIndices.length;
+  if (total > 0) {
+    const imageCount = Math.round(total * 0.25);
+    const rankingCount = Math.round(total * 0.25);
     const shuffled = triviaIndices
       .map(i => ({ i, k: Math.random() }))
       .sort((a, b) => a.k - b.k)
       .map(o => o.i);
     const imageSet = new Set(shuffled.slice(0, imageCount));
+    const rankingSet = new Set(shuffled.slice(imageCount, imageCount + rankingCount));
     for (let i = 0; i < entries.length; i++) {
-      if (imageSet.has(i)) entries[i].isImageQuestion = true;
+      if (entries[i].game !== 'trivia') continue;
+      entries[i].triviaKind = imageSet.has(i) ? 'image' : rankingSet.has(i) ? 'ranking' : 'text';
     }
   }
   return entries;
@@ -318,6 +328,7 @@ function QuestionDisplay({
             Round {round}/{total}
           </span>
           <Tag color={T.accent}>{GAMES.find(g => g.key === game)?.title}</Tag>
+          {question.kind === 'ranking' && <Tag color={T.inkMute}>Ranking</Tag>}
           <Tag color={T.inkMute}>{category}</Tag>
         </div>
       </div>
@@ -348,7 +359,7 @@ function QuestionDisplay({
           maxWidth: 1100,
         }}>{question.question}</div>
 
-        {game === 'trivia' && question.choices && (
+        {game === 'trivia' && question.kind !== 'ranking' && question.choices && (
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: 12, maxWidth: 1000, width: '100%' }}>
             {question.choices.map((choice, i) => (
               <button key={i} onClick={() => onHighlight(i)} style={{
@@ -367,13 +378,30 @@ function QuestionDisplay({
           </div>
         )}
 
+        {game === 'trivia' && question.kind === 'ranking' && question.items && (
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 10, maxWidth: 800, width: '100%', textAlign: 'left' }}>
+            {(question.items as string[]).map((label, i) => (
+              <div key={i} style={{
+                padding: '14px 18px', border: `1px solid ${T.lineFade}`,
+                fontFamily: fontStack.body, fontSize: 'clamp(15px, 1.8vw, 22px)',
+                display: 'flex', justifyContent: 'space-between', alignItems: 'center',
+              }}>
+                <span>{label}</span>
+                <span style={{ fontFamily: fontStack.mono, fontSize: 11, color: T.inkMute, letterSpacing: '0.15em' }}>
+                  {String.fromCharCode(65 + i)}
+                </span>
+              </div>
+            ))}
+          </div>
+        )}
+
         {game === 'wall' && question.items && (
           <div style={{
             display: 'grid',
             gridTemplateColumns: `repeat(${isMobile ? 2 : 4}, 1fr)`,
             gap: 8, maxWidth: 1200, width: '100%',
           }}>
-            {question.items.map((item, i) => (
+            {question.items.map((item: any, i: number) => (
               <div key={i} style={{
                 padding: '12px 14px', border: `1px solid ${T.lineFade}`,
                 fontFamily: fontStack.body, fontSize: 'clamp(13px, 1.4vw, 18px)',
@@ -427,6 +455,7 @@ function RevealDisplay({
             Round {round}/{total}
           </span>
           <Tag color={T.accent}>{GAMES.find(g => g.key === game)?.title}</Tag>
+          {question.kind === 'ranking' && <Tag color={T.inkMute}>Ranking</Tag>}
           <Tag color={T.inkMute}>{category}</Tag>
         </div>
       </div>
@@ -456,7 +485,7 @@ function RevealDisplay({
           maxWidth: 1100,
         }}>{question.question}</div>
 
-        {game === 'trivia' && question.choices && question.correctIndex !== undefined && (
+        {game === 'trivia' && question.kind !== 'ranking' && question.choices && question.correctIndex !== undefined && (
           <div>
             <div style={{ ...mono(11, { color: T.inkMute, marginBottom: 10 }) }}>Answer</div>
             <div style={{
@@ -468,6 +497,29 @@ function RevealDisplay({
                 {['A', 'B', 'C', 'D'][question.correctIndex]}
               </span>
               {question.choices[question.correctIndex]}
+            </div>
+          </div>
+        )}
+
+        {game === 'trivia' && question.kind === 'ranking' && question.items && question.correctOrder && (
+          <div style={{ width: '100%', maxWidth: 800, textAlign: 'left' }}>
+            <div style={{ ...mono(11, { color: T.inkMute, marginBottom: 10 }) }}>Correct order</div>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+              {question.correctOrder.map((itemIdx, rankIdx) => (
+                <div key={rankIdx} style={{
+                  display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+                  padding: '14px 18px', background: T.correctBg,
+                  border: `1px solid ${T.correct}`, color: T.correct,
+                  fontFamily: fontStack.body, fontSize: 'clamp(15px, 1.8vw, 22px)',
+                }}>
+                  <span style={{ display: 'flex', gap: 16, alignItems: 'baseline' }}>
+                    <span style={{ fontFamily: fontStack.mono, fontSize: 11, letterSpacing: '0.15em' }}>
+                      {String(rankIdx + 1).padStart(2, '0')}
+                    </span>
+                    <span>{(question.items as string[])[itemIdx]}</span>
+                  </span>
+                </div>
+              ))}
             </div>
           </div>
         )}
@@ -531,6 +583,8 @@ function ScoringScreen({
   players: Player[]; question: Question; game: GameType;
   onDone: (deltas: Record<string, number>) => void;
 }) {
+  const isRanking = question.kind === 'ranking';
+  const useStepper = game === 'wall' || (game === 'trivia' && isRanking);
   const [deltas, setDeltas] = useState<Record<string, number>>(() =>
     Object.fromEntries(players.map(p => [p.id, 0]))
   );
@@ -549,8 +603,13 @@ function ScoringScreen({
       padding: 'clamp(16px, 3vw, 32px) clamp(16px, 4vw, 48px)',
     }}>
       <div style={{ ...mono(11, { color: T.inkMute }) }}>
-        § Score this round — {GAMES.find(g => g.key === game)?.title}
+        § Score this round — {GAMES.find(g => g.key === game)?.title}{isRanking ? ' · Ranking' : ''}
       </div>
+      {isRanking && (
+        <div style={{ ...mono(11, { color: T.inkMute, marginTop: 6 }) }}>
+          +2 per item in correct position
+        </div>
+      )}
 
       <div style={{
         flex: 1,
@@ -571,8 +630,8 @@ function ScoringScreen({
               <div style={{ ...mono(11, { color: T.inkMute }) }}>{p.score} pts total</div>
             </div>
 
-            {/* Trivia: toggle +8 */}
-            {game === 'trivia' && (
+            {/* Trivia (choice): toggle +8 */}
+            {game === 'trivia' && !isRanking && (
               <button onClick={() => setDelta(p.id, deltas[p.id] === 8 ? 0 : 8)} style={{
                 padding: '10px 20px', cursor: 'pointer',
                 background: deltas[p.id] === 8 ? T.correct : 'transparent',
@@ -585,8 +644,8 @@ function ScoringScreen({
               </button>
             )}
 
-            {/* Wall: stepper 0–8 */}
-            {game === 'wall' && (
+            {/* Wall and Trivia ranking: stepper 0–8 */}
+            {useStepper && (
               <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
                 <button onClick={() => setDelta(p.id, Math.max(0, deltas[p.id] - 1))} style={{
                   width: 36, height: 36, cursor: 'pointer', background: 'transparent',
@@ -723,13 +782,16 @@ export default function PresenterPage() {
           category: entry.category,
           previousQuestions: combined,
           avoidWikiSubjects,
-          isImageQuestion: !!entry.isImageQuestion,
+          triviaKind: entry.triviaKind ?? 'text',
         }),
       });
       const data = await res.json();
       if (data.error) throw new Error(data.error);
       appendRecentQuestion(data.question.slice(0, 80));
       if (data.wikiQuery) appendRecentWikiSubject(data.wikiQuery);
+      if (data.kind === 'ranking' && Array.isArray(data.items)) {
+        appendRecentWikiSubject([...data.items].sort().join('|'));
+      }
       setQuestion(data);
       setHighlighted(null);
       setPhase('displaying');

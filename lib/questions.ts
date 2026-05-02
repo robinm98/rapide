@@ -3,6 +3,8 @@ import { fetchWikiImage } from '@/lib/wiki';
 
 const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
 
+export type TriviaKind = 'text' | 'image' | 'ranking';
+
 function buildAvoidQuestionsClause(previousQuestions: string[]) {
   return previousQuestions.length
     ? `\n\nDo not repeat any of these already-asked questions from this session: ${previousQuestions.slice(-15).join('; ')}`
@@ -11,7 +13,7 @@ function buildAvoidQuestionsClause(previousQuestions: string[]) {
 
 function buildAvoidWikiClause(avoidWikiSubjects: string[]) {
   return avoidWikiSubjects.length
-    ? `\n\nDo not pick a wikiQuery for any subject already used in this session: ${avoidWikiSubjects.slice(-30).join('; ')}.`
+    ? `\n\nDo not pick a subject already used in this session: ${avoidWikiSubjects.slice(-30).join('; ')}.`
     : '';
 }
 
@@ -57,17 +59,44 @@ Respond ONLY with valid JSON, no markdown, no preamble:
 }${buildAvoidQuestionsClause(previousQuestions)}${buildAvoidWikiClause(avoidWikiSubjects)}`;
 }
 
+export function buildTriviaRankingPrompt(
+  category: string,
+  previousQuestions: string[],
+  avoidWikiSubjects: string[],
+) {
+  return `Generate ONE ranking trivia question from the broad category "${category}".
+- Vary the difficulty randomly (easy / medium / hard)
+- Be culturally diverse — not US-centric
+- A ranking question gives 4 items that the player must place in correct order.
+
+Rules:
+- Pick exactly 4 items from a SINGLE comparable category (all films, all countries, all mountains, all athletes, all events, etc. — never mix kinds).
+- Pick a clear, OBJECTIVE ranking criterion: release year, population, height, distance, championship count, founding date, area, etc. Never subjective ("best", "most popular").
+- Phrase the question clearly, e.g. "Rank these countries by population, largest to smallest." or "Rank these films from oldest to newest."
+- The "items" array MUST be in the CORRECT ORDER according to the criterion (the server will shuffle them before showing the player).
+- The correct order must be verifiable and unambiguous.
+- Vary subjects across rounds — don't always pick films or countries.
+
+Respond ONLY with valid JSON, no markdown, no preamble:
+{
+  "kind": "ranking",
+  "question": "Rank these films from oldest to newest",
+  "items": ["item in correct rank 1", "item in correct rank 2", "item in correct rank 3", "item in correct rank 4"],
+  "explanation": "1-2 sentence context, e.g. the actual years"
+}${buildAvoidQuestionsClause(previousQuestions)}${buildAvoidWikiClause(avoidWikiSubjects)}`;
+}
+
 export function buildPrompt(
   game: string,
   category: string,
   previousQuestions: string[],
   avoidWikiSubjects: string[] = [],
-  isImageQuestion = false,
+  triviaKind: TriviaKind = 'text',
 ) {
   if (game === 'trivia') {
-    return isImageQuestion
-      ? buildTriviaImagePrompt(category, previousQuestions, avoidWikiSubjects)
-      : buildTriviaTextPrompt(category, previousQuestions);
+    if (triviaKind === 'image') return buildTriviaImagePrompt(category, previousQuestions, avoidWikiSubjects);
+    if (triviaKind === 'ranking') return buildTriviaRankingPrompt(category, previousQuestions, avoidWikiSubjects);
+    return buildTriviaTextPrompt(category, previousQuestions);
   }
 
   const avoid = buildAvoidQuestionsClause(previousQuestions);
@@ -120,15 +149,32 @@ export async function callClaude(prompt: string): Promise<any> {
   return JSON.parse(text);
 }
 
+// Server-side shuffle for ranking items. Claude returns items in correct order;
+// we shuffle and emit a correctOrder array that maps rank → shuffled index.
+function shuffleRanking(data: any) {
+  if (!Array.isArray(data?.items) || data.items.length !== 4) return data;
+  const indexed = (data.items as string[]).map((label, originalIdx) => ({ label, originalIdx }));
+  const shuffled = indexed
+    .map(o => ({ o, k: Math.random() }))
+    .sort((a, b) => a.k - b.k)
+    .map(x => x.o);
+  const newItems = shuffled.map(x => x.label);
+  // correctOrder[rank] = position in newItems of the item that belongs at that rank
+  const correctOrder = indexed.map(({ originalIdx }) =>
+    shuffled.findIndex(x => x.originalIdx === originalIdx),
+  );
+  return { ...data, items: newItems, correctOrder, kind: 'ranking' };
+}
+
 export async function generateQuestion(
   game: 'trivia' | 'wall' | 'closest',
   category: string,
   previousQuestions: string[],
   avoidWikiSubjects: string[] = [],
-  isImageQuestion = false,
+  triviaKind: TriviaKind = 'text',
 ): Promise<any> {
   const data = await callClaude(
-    buildPrompt(game, category, previousQuestions, avoidWikiSubjects, isImageQuestion),
+    buildPrompt(game, category, previousQuestions, avoidWikiSubjects, triviaKind),
   );
 
   if (game === 'wall' && Array.isArray(data.items)) {
@@ -138,7 +184,11 @@ export async function generateQuestion(
       .map((o: any) => o.v);
   }
 
-  if (game === 'trivia' && data.imageFirst && data.wikiQuery) {
+  if (game === 'trivia' && triviaKind === 'ranking') {
+    return shuffleRanking(data);
+  }
+
+  if (game === 'trivia' && triviaKind === 'image' && data.imageFirst && data.wikiQuery) {
     const imageUrl = await fetchWikiImage(data.wikiQuery);
     if (imageUrl) {
       data.imageUrl = imageUrl;
