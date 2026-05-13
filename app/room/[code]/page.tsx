@@ -535,39 +535,45 @@ export default function RoomPage({ params }: { params: { code: string } }) {
 
           return (
             <div style={{ display: 'flex', flexDirection: 'column', gap: 24 }}>
-              <div style={{ display: 'flex', flexDirection: 'column' }}>
+              <div style={{ display: 'grid', gridTemplateColumns: `repeat(${isMobile ? 2 : 4}, 1fr)`, gap: 8 }}>
                 {q.items.map((item: any, idx: number) => {
                   const pickedBy = playersWhoPicked(idx);
+                  const correct = item.correct;
                   return (
                     <div key={idx} style={{
-                      padding: '14px 0',
-                      borderTop: idx === 0 ? `1px solid ${T.lineFade}` : 'none',
-                      borderBottom: `1px solid ${T.lineFade}`,
+                      aspectRatio: '1.3',
+                      padding: 14,
+                      background: correct ? T.bgAlt : T.bg,
+                      border: `1.5px solid ${correct ? T.accent : T.lineFade}`,
+                      color: correct ? T.ink : T.inkMute,
+                      fontFamily: fontStack.body, fontSize: isMobile ? 13 : 14, lineHeight: 1.2,
+                      display: 'flex', flexDirection: 'column', justifyContent: 'space-between',
+                      textAlign: 'left',
+                      opacity: correct ? 1 : 0.85,
                     }}>
-                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', gap: 12, flexWrap: 'wrap' }}>
-                        <span style={{
-                          fontFamily: fontStack.display, fontSize: 'clamp(17px, 2vw, 20px)', fontWeight: 500,
-                          color: item.correct ? T.ink : T.inkMute,
-                          opacity: item.correct ? 1 : 0.7,
-                        }}>
-                          {item.label}
+                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
+                        <span style={{ fontFamily: fontStack.mono, fontSize: 10, opacity: 0.5 }}>
+                          {String(idx + 1).padStart(2, '0')}
                         </span>
-                        <span style={{
-                          fontFamily: fontStack.mono, fontSize: 13,
-                          color: item.correct ? T.correct : T.wrong,
-                        }}>
-                          {item.correct ? '✓' : '✗'}
-                        </span>
+                        {correct && (
+                          <span style={{ fontFamily: fontStack.mono, fontSize: 12, color: T.accent }}>✓</span>
+                        )}
                       </div>
                       <div style={{
-                        marginTop: 6,
-                        fontFamily: fontStack.mono, fontSize: 11, letterSpacing: '0.12em',
-                        textTransform: 'uppercase',
-                        color: T.inkMute,
-                        display: 'flex', flexWrap: 'wrap', gap: '4px 10px',
+                        fontWeight: 500,
+                        color: correct ? T.ink : T.inkMute,
+                      }}>
+                        {item.label}
+                      </div>
+                      <div style={{
+                        fontFamily: fontStack.mono, fontSize: 9,
+                        letterSpacing: '0.1em', textTransform: 'uppercase',
+                        color: T.inkMute, lineHeight: 1.4,
+                        display: 'flex', flexWrap: 'wrap', gap: '2px 6px',
+                        minHeight: 12,
                       }}>
                         {pickedBy.length === 0 ? (
-                          <span style={{ fontStyle: 'italic', opacity: 0.7 }}>No one picked this</span>
+                          <span style={{ opacity: 0.4 }}>—</span>
                         ) : (
                           pickedBy.map((p, i) => {
                             const isMe = p.id === playerId;
