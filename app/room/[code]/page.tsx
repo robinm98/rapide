@@ -403,35 +403,92 @@ export default function RoomPage({ params }: { params: { code: string } }) {
                 </div>
               )}
               {state.phase === 'revealing' && (
-                <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-                  <div style={{ fontFamily: fontStack.mono, fontSize: 11, color: T.inkMute, letterSpacing: '0.2em', marginBottom: 4 }}>
-                    Correct order
-                  </div>
-                  {correctOrder.map((itemIdx, rankIdx) => (
-                    <div key={rankIdx} style={{
-                      display: 'flex', alignItems: 'center', justifyContent: 'space-between',
-                      padding: '16px 20px', background: T.correctBg,
-                      border: `1px solid ${T.correct}`, color: T.correct,
-                      fontFamily: fontStack.body, fontSize: 17,
-                    }}>
-                      <span style={{ display: 'flex', gap: 16, alignItems: 'baseline' }}>
-                        <span style={{ fontFamily: fontStack.mono, fontSize: 11, letterSpacing: '0.15em' }}>
-                          {String(rankIdx + 1).padStart(2, '0')}
-                        </span>
-                        <span>{items[itemIdx]}</span>
-                      </span>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 24 }}>
+                  {/* Correct order */}
+                  <div>
+                    <div style={{ fontFamily: fontStack.mono, fontSize: 11, color: T.inkMute, letterSpacing: '0.2em', textTransform: 'uppercase', marginBottom: 10 }}>
+                      Correct order
                     </div>
-                  ))}
+                    <div style={{ display: 'flex', flexWrap: 'wrap', gap: '8px 20px', alignItems: 'baseline' }}>
+                      {correctOrder.map((itemIdx, rankIdx) => (
+                        <div key={rankIdx} style={{ display: 'flex', gap: 8, alignItems: 'baseline' }}>
+                          <span style={{ fontFamily: fontStack.mono, fontSize: 12, letterSpacing: '0.15em', color: T.inkMute }}>
+                            {rankIdx + 1}.
+                          </span>
+                          <span style={{ fontFamily: fontStack.display, fontSize: 'clamp(18px, 2.2vw, 22px)', fontWeight: 500, color: T.ink }}>
+                            {items[itemIdx]}
+                          </span>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+
+                  {/* Per-player rows */}
+                  <div style={{ display: 'flex', flexDirection: 'column' }}>
+                    {room.players.map((p, pIdx) => {
+                      const submitted: number[] = Array.isArray(state.answers[p.id]) ? state.answers[p.id] : [];
+                      const matches = submitted.reduce((acc, itemIdx, rankIdx) => (
+                        acc + (itemIdx === correctOrder[rankIdx] ? 1 : 0)
+                      ), 0);
+                      const isMe = p.id === playerId;
+                      return (
+                        <div key={p.id} style={{
+                          padding: '16px 0 16px 14px',
+                          borderTop: pIdx === 0 ? `1px solid ${T.lineFade}` : 'none',
+                          borderBottom: `1px solid ${T.lineFade}`,
+                          borderLeft: isMe ? `2px solid ${T.accent}` : '2px solid transparent',
+                        }}>
+                          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', gap: 12, flexWrap: 'wrap' }}>
+                            <span style={{
+                              fontFamily: fontStack.mono, fontSize: 13, letterSpacing: '0.15em',
+                              textTransform: 'uppercase', color: isMe ? T.accent : T.ink,
+                              fontWeight: 600,
+                            }}>
+                              {isMe ? 'You' : p.name}
+                            </span>
+                            <span style={{ fontFamily: fontStack.mono, fontSize: 12, color: T.inkSoft }}>
+                              {matches} / 4
+                            </span>
+                          </div>
+                          {submitted.length === 4 ? (
+                            <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px 16px', marginTop: 8 }}>
+                              {submitted.map((itemIdx, rankIdx) => {
+                                const correct = itemIdx === correctOrder[rankIdx];
+                                return (
+                                  <span key={rankIdx} style={{
+                                    fontFamily: fontStack.body,
+                                    fontSize: 14,
+                                    color: correct ? T.ink : T.inkMute,
+                                    opacity: correct ? 1 : 0.6,
+                                    textDecoration: correct ? 'none' : 'line-through',
+                                  }}>
+                                    <span style={{ fontFamily: fontStack.mono, fontSize: 11, marginRight: 4, color: T.inkMute }}>
+                                      {rankIdx + 1}.
+                                    </span>
+                                    {items[itemIdx]} {correct ? '✓' : '✗'}
+                                  </span>
+                                );
+                              })}
+                            </div>
+                          ) : (
+                            <div style={{ marginTop: 8, fontFamily: fontStack.mono, fontSize: 11, color: T.inkMute, fontStyle: 'italic' }}>
+                              No submission
+                            </div>
+                          )}
+                        </div>
+                      );
+                    })}
+                  </div>
                 </div>
               )}
             </>
           );
         })()}
 
-        {/* WALL */}
-        {currentGame === 'wall' && (
+        {/* WALL — answering */}
+        {currentGame === 'wall' && state.phase === 'answering' && (
           <>
-            {state.phase === 'answering' && !iAnswered && (
+            {!iAnswered && (
               <div style={{ marginBottom: 16, fontFamily: fontStack.mono, fontSize: 12, color: T.inkSoft }}>
                 Selected {myWallPicks.length} / 8
               </div>
@@ -439,20 +496,16 @@ export default function RoomPage({ params }: { params: { code: string } }) {
             <div style={{ display: 'grid', gridTemplateColumns: `repeat(${isMobile ? 2 : 4}, 1fr)`, gap: 8 }}>
               {q.items.map((item: any, idx: number) => {
                 const picked = myWallPicks.includes(idx);
-                let bg = T.bg, color = T.ink, border = T.ink;
-                if (state.phase === 'revealing') {
-                  if (item.correct) { bg = T.correctBg; color = T.correct; border = T.correct; }
-                  else { bg = T.wrongBg; color = T.wrong; border = T.wrong; }
-                } else if (picked) { bg = T.ink; color = T.bg; border = T.ink; }
-
-                const canClick = state.phase === 'answering' && !iAnswered;
+                const bg = picked ? T.ink : T.bg;
+                const color = picked ? T.bg : T.ink;
+                const canClick = !iAnswered;
                 return (
                   <button key={idx} disabled={!canClick} onClick={() => {
                     if (picked) setMyWallPicks(myWallPicks.filter(i => i !== idx));
                     else if (myWallPicks.length < 8) setMyWallPicks([...myWallPicks, idx]);
                   }} style={{
                     aspectRatio: '1.3', padding: 16, cursor: canClick ? 'pointer' : 'default',
-                    background: bg, color, border: `1.5px solid ${border}`,
+                    background: bg, color, border: `1.5px solid ${T.ink}`,
                     fontFamily: fontStack.body, fontSize: isMobile ? 13 : 14, lineHeight: 1.2,
                     display: 'flex', flexDirection: 'column', justifyContent: 'space-between', textAlign: 'left',
                   }}>
@@ -460,14 +513,11 @@ export default function RoomPage({ params }: { params: { code: string } }) {
                       {String(idx + 1).padStart(2, '0')}
                     </span>
                     <span style={{ fontWeight: 500 }}>{item.label}</span>
-                    {state.phase === 'revealing' && (
-                      <span style={{ fontFamily: fontStack.mono, fontSize: 10 }}>{item.correct ? '✓' : '✗'}</span>
-                    )}
                   </button>
                 );
               })}
             </div>
-            {state.phase === 'answering' && !iAnswered && (
+            {!iAnswered && (
               <div style={{ marginTop: 20, display: 'flex', justifyContent: 'flex-end' }}>
                 <Btn onClick={() => callAPI('answer', { answer: myWallPicks.length, wallPicks: myWallPicks })} disabled={myWallPicks.length === 0 || submitting}>
                   Lock in {myWallPicks.length} picks
@@ -476,6 +526,107 @@ export default function RoomPage({ params }: { params: { code: string } }) {
             )}
           </>
         )}
+
+        {/* WALL — reveal */}
+        {currentGame === 'wall' && state.phase === 'revealing' && (() => {
+          const wallPicks: Record<string, number[]> = state.wallPicks ?? {};
+          const playersWhoPicked = (itemIdx: number) =>
+            room.players.filter(p => (wallPicks[p.id] ?? []).includes(itemIdx));
+
+          return (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 24 }}>
+              <div style={{ display: 'flex', flexDirection: 'column' }}>
+                {q.items.map((item: any, idx: number) => {
+                  const pickedBy = playersWhoPicked(idx);
+                  return (
+                    <div key={idx} style={{
+                      padding: '14px 0',
+                      borderTop: idx === 0 ? `1px solid ${T.lineFade}` : 'none',
+                      borderBottom: `1px solid ${T.lineFade}`,
+                    }}>
+                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', gap: 12, flexWrap: 'wrap' }}>
+                        <span style={{
+                          fontFamily: fontStack.display, fontSize: 'clamp(17px, 2vw, 20px)', fontWeight: 500,
+                          color: item.correct ? T.ink : T.inkMute,
+                          opacity: item.correct ? 1 : 0.7,
+                        }}>
+                          {item.label}
+                        </span>
+                        <span style={{
+                          fontFamily: fontStack.mono, fontSize: 13,
+                          color: item.correct ? T.correct : T.wrong,
+                        }}>
+                          {item.correct ? '✓' : '✗'}
+                        </span>
+                      </div>
+                      <div style={{
+                        marginTop: 6,
+                        fontFamily: fontStack.mono, fontSize: 11, letterSpacing: '0.12em',
+                        textTransform: 'uppercase',
+                        color: T.inkMute,
+                        display: 'flex', flexWrap: 'wrap', gap: '4px 10px',
+                      }}>
+                        {pickedBy.length === 0 ? (
+                          <span style={{ fontStyle: 'italic', opacity: 0.7 }}>No one picked this</span>
+                        ) : (
+                          pickedBy.map((p, i) => {
+                            const isMe = p.id === playerId;
+                            return (
+                              <span key={p.id}>
+                                <span style={{
+                                  color: isMe ? T.accent : T.inkSoft,
+                                  fontWeight: isMe ? 600 : 400,
+                                }}>
+                                  {isMe ? 'You' : p.name}
+                                </span>
+                                {i < pickedBy.length - 1 && <span style={{ color: T.inkMute }}>{' · '}</span>}
+                              </span>
+                            );
+                          })
+                        )}
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+
+              {/* Per-player score delta */}
+              <div>
+                <div style={{ fontFamily: fontStack.mono, fontSize: 11, letterSpacing: '0.2em', textTransform: 'uppercase', color: T.inkMute, marginBottom: 10 }}>
+                  This round
+                </div>
+                <div style={{ display: 'flex', flexDirection: 'column' }}>
+                  {room.players.map((p, pIdx) => {
+                    const picks: number[] = wallPicks[p.id] ?? [];
+                    const correctCount = picks.filter(i => q.items[i]?.correct).length;
+                    const isMe = p.id === playerId;
+                    return (
+                      <div key={p.id} style={{
+                        display: 'flex', justifyContent: 'space-between', alignItems: 'baseline',
+                        padding: '10px 14px',
+                        borderTop: pIdx === 0 ? `1px solid ${T.lineFade}` : 'none',
+                        borderBottom: `1px solid ${T.lineFade}`,
+                        borderLeft: isMe ? `2px solid ${T.accent}` : '2px solid transparent',
+                      }}>
+                        <span style={{
+                          fontFamily: fontStack.mono, fontSize: 12, letterSpacing: '0.15em',
+                          textTransform: 'uppercase',
+                          color: isMe ? T.accent : T.ink,
+                          fontWeight: 600,
+                        }}>
+                          {isMe ? 'You' : p.name}
+                        </span>
+                        <span style={{ fontFamily: fontStack.mono, fontSize: 12, color: T.inkSoft }}>
+                          +{correctCount} pts
+                        </span>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+            </div>
+          );
+        })()}
 
         {/* CLOSEST */}
         {currentGame === 'closest' && (
