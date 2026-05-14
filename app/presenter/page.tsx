@@ -1,6 +1,6 @@
 'use client';
 import React, { useState, useEffect, useCallback } from 'react';
-import { Shell, Btn, Tag } from '@/components/ui';
+import { Shell, Btn, Tag, SkipButton } from '@/components/ui';
 import { T, fontStack } from '@/lib/design';
 import { assignTriviaMeta, type TriviaKind, type Difficulty } from '@/lib/trivia-meta';
 
@@ -290,11 +290,11 @@ function SetupScreen({ onStart }: { onStart: (players: Player[], queue: RoundEnt
 // ─── Question Display ─────────────────────────────────────────────────────────
 
 function QuestionDisplay({
-  round, total, question, game, category, highlighted, onHighlight, onReveal, isMobile,
+  round, total, question, game, category, highlighted, onHighlight, onReveal, onSkip, isMobile,
 }: {
   round: number; total: number; question: Question; game: GameType; category: string;
   highlighted: number | null; onHighlight: (i: number) => void; onReveal: () => void;
-  isMobile: boolean;
+  onSkip: () => void; isMobile: boolean;
 }) {
   return (
     <div className="game-fit" style={{
@@ -315,6 +315,9 @@ function QuestionDisplay({
           <Tag color={T.accent}>{GAMES.find(g => g.key === game)?.title}</Tag>
           {question.kind === 'ranking' && <Tag color={T.inkMute}>Ranking</Tag>}
           <Tag color={T.inkMute}>{category}</Tag>
+        </div>
+        <div style={{ position: 'absolute', right: 0 }}>
+          <SkipButton onClick={onSkip} />
         </div>
       </div>
 
@@ -916,6 +919,7 @@ export default function PresenterPage() {
             highlighted={highlighted}
             onHighlight={setHighlighted}
             onReveal={handleReveal}
+            onSkip={() => fetchQuestion(currentEntry, pastQuestions)}
             isMobile={isMobile}
           />
         )}

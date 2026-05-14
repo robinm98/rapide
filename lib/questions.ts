@@ -200,12 +200,27 @@ function shuffleRanking(data: any) {
   return { ...data, items: newItems, correctOrder, kind: 'ranking' };
 }
 
+// Fisher-Yates shuffle of the 4 multiple-choice options, with correctIndex
+// remapped to the answer's new position. Counters Claude's positional bias
+// (it tends to place the correct answer at index 0).
+function shuffleChoices(data: any) {
+  if (!Array.isArray(data?.choices) || data.choices.length !== 4) return data;
+  if (typeof data.correctIndex !== 'number') return data;
+  const correctAnswer = data.choices[data.correctIndex];
+  const shuffled = [...data.choices];
+  for (let i = shuffled.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [shuffled[i], shuffled[j]] = [shuffled[j], shuffled[i]];
+  }
+  return { ...data, choices: shuffled, correctIndex: shuffled.indexOf(correctAnswer) };
+}
+
 export async function generateQuestion(
   game: 'trivia' | 'wall' | 'closest',
   category: string,
   opts: QuestionOpts = {},
 ): Promise<any> {
-  const data = await callClaude(buildPrompt(game, category, opts));
+  let data = await callClaude(buildPrompt(game, category, opts));
 
   if (game === 'wall' && Array.isArray(data.items)) {
     data.items = data.items
@@ -225,11 +240,16 @@ export async function generateQuestion(
     } else {
       // Both Wikipedia and Commons failed — fall back to a fresh text-only question.
       try {
-        return await callClaude(buildTriviaTextPrompt(category, { ...opts, triviaKind: 'text' }));
+        data = await callClaude(buildTriviaTextPrompt(category, { ...opts, triviaKind: 'text' }));
       } catch {
         // keep the original payload but without an image
       }
     }
+  }
+
+  // Randomize answer position for all trivia multiple-choice questions.
+  if (game === 'trivia') {
+    data = shuffleChoices(data);
   }
 
   return data;

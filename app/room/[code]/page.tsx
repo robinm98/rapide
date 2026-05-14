@@ -1,8 +1,8 @@
 'use client';
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { supabase } from '@/lib/supabase';
-import { Shell, Btn, Tag } from '@/components/ui';
+import { Shell, Btn, Tag, SkipButton } from '@/components/ui';
 import { T, fontStack } from '@/lib/design';
 
 type Player = { id: string; name: string; score: number; isHost?: boolean };
@@ -31,7 +31,11 @@ export default function RoomPage({ params }: { params: { code: string } }) {
   const [closestInput, setClosestInput] = useState('');
   const [myRanks, setMyRanks] = useState<(number | null)[]>([null, null, null, null]);
   const [submitting, setSubmitting] = useState(false);
+  const [skipping, setSkipping] = useState(false);
+  const [skipError, setSkipError] = useState('');
+  const [skipNotice, setSkipNotice] = useState(false);
   const [isMobile, setIsMobile] = useState(false);
+  const prevSkipCountRef = useRef<number | null>(null);
 
   useEffect(() => {
     const update = () => setIsMobile(window.innerWidth < 768);
@@ -70,6 +74,26 @@ export default function RoomPage({ params }: { params: { code: string } }) {
     return () => { supabase.removeChannel(channel); };
   }, [code, router]);
 
+  // Show a one-off notice to non-host players when the host skips a question.
+  useEffect(() => {
+    const sc = room?.state?.skipCount ?? 0;
+    const amHost = !!room && room.host_id === playerId;
+    if (prevSkipCountRef.current === null) {
+      prevSkipCountRef.current = sc;
+      return;
+    }
+    if (sc > prevSkipCountRef.current) {
+      prevSkipCountRef.current = sc;
+      if (!amHost) {
+        setSkipNotice(true);
+        const t = setTimeout(() => setSkipNotice(false), 4000);
+        return () => clearTimeout(t);
+      }
+    } else {
+      prevSkipCountRef.current = sc;
+    }
+  }, [room, playerId]);
+
   const callAPI = async (action: string, extra: any = {}) => {
     setSubmitting(true);
     try {
@@ -82,6 +106,25 @@ export default function RoomPage({ params }: { params: { code: string } }) {
       if (data.error) setError(data.error);
     } catch (e: any) { setError(e.message); }
     setSubmitting(false);
+  };
+
+  // Host-only: discard the current question and pull a fresh one for the same
+  // round. A failure is shown inline and leaves the original question in place.
+  const doSkip = async () => {
+    setSkipping(true);
+    setSkipError('');
+    try {
+      const res = await fetch('/api/room', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'skip', code, playerId }),
+      });
+      const data = await res.json();
+      if (data.error) setSkipError("Couldn't generate a new question. Try again.");
+    } catch {
+      setSkipError("Couldn't generate a new question. Try again.");
+    }
+    setSkipping(false);
   };
 
   if (loading) {
@@ -218,12 +261,27 @@ export default function RoomPage({ params }: { params: { code: string } }) {
         style={{ maxWidth: 1100, width: '100%', margin: '0 auto', padding: 'clamp(16px, 4vw, 32px)' }}
       >
         <div className="game-screen-header">
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 32, paddingBottom: 20, borderBottom: `1px solid ${T.lineFade}`, flexWrap: 'wrap', gap: 12 }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: skipError || skipNotice ? 16 : 32, paddingBottom: 20, borderBottom: `1px solid ${T.lineFade}`, flexWrap: 'wrap', gap: 12 }}>
           <div style={{ fontFamily: fontStack.mono, fontSize: 11, color: T.inkMute, letterSpacing: '0.15em', textTransform: 'uppercase' }}>
             Round {(state.queueIndex ?? 0) + 1} / {state.queue?.length ?? config.rounds}
           </div>
-          <Tag color={T.accent}>Room {code}</Tag>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+            {isHost && state.phase === 'answering' && (
+              <SkipButton onClick={doSkip} loading={skipping} />
+            )}
+            <Tag color={T.accent}>Room {code}</Tag>
+          </div>
         </div>
+        {skipError && (
+          <div style={{ marginBottom: 24, fontFamily: fontStack.mono, fontSize: 11, color: T.wrong }}>
+            {skipError}
+          </div>
+        )}
+        {skipNotice && (
+          <div style={{ marginBottom: 24, fontFamily: fontStack.mono, fontSize: 11, color: T.accent }}>
+            The host skipped this question — a new one is coming.
+          </div>
+        )}
 
         {/* Scoreboard */}
         <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, marginBottom: 32 }}>
