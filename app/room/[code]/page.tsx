@@ -421,7 +421,7 @@ export default function RoomPage({ params }: { params: { code: string } }) {
             <>
               {state.phase === 'answering' && (
                 <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-                  {items.map((item, idx) => {
+                  {!iAnswered && items.map((item, idx) => {
                     const rank = myRanks[idx];
                     const ranked = rank !== null;
                     return (
