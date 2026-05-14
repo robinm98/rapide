@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import { supabaseAdmin } from '@/lib/supabase-admin';
-import { generateQuestion, type TriviaKind } from '@/lib/questions';
+import { generateQuestion } from '@/lib/questions';
+import { assignTriviaMeta, type TriviaKind, type Difficulty } from '@/lib/trivia-meta';
 
 export const runtime = 'nodejs';
 
@@ -13,43 +14,21 @@ function genCode() {
   return Array.from({ length: 4 }, () => chars[Math.floor(Math.random() * chars.length)]).join('');
 }
 
-type QueueEntry = { game: string; category: string; triviaKind?: TriviaKind };
+type QueueEntry = {
+  game: string;
+  category: string;
+  triviaKind?: TriviaKind;
+  subAngle?: string;
+  difficulty?: Difficulty;
+};
 
-// For each trivia round, pick a kind: 25% image / 50% text / 25% ranking, distributed at random indices.
-function assignTriviaKinds(queue: QueueEntry[]): QueueEntry[] {
-  const triviaIndices: number[] = [];
-  queue.forEach((e, i) => { if (e.game === 'trivia') triviaIndices.push(i); });
-  const total = triviaIndices.length;
-  if (total === 0) return queue;
-
-  const imageCount = Math.round(total * 0.25);
-  const rankingCount = Math.round(total * 0.25);
-
-  const shuffled = triviaIndices
-    .map(i => ({ i, k: Math.random() }))
-    .sort((a, b) => a.k - b.k)
-    .map(o => o.i);
-
-  const imageSet = new Set(shuffled.slice(0, imageCount));
-  const rankingSet = new Set(shuffled.slice(imageCount, imageCount + rankingCount));
-
-  return queue.map((e, i) => {
-    if (e.game !== 'trivia') return e;
-    const kind: TriviaKind = imageSet.has(i) ? 'image' : rankingSet.has(i) ? 'ranking' : 'text';
-    return { ...e, triviaKind: kind };
-  });
-}
-
-function rankingSubjectKey(question: any): string | null {
-  if (question?.kind !== 'ranking' || !Array.isArray(question.items)) return null;
-  return [...question.items].sort().join('|');
-}
-
-function appendWikiTracker(question: any, prev: string[]): string[] {
-  if (question?.wikiQuery) return [...prev, question.wikiQuery];
-  const r = rankingSubjectKey(question);
-  if (r) return [...prev, r];
-  return prev;
+// The general subject stem of a generated question, for the cross-round exclusion list.
+function subjectOf(question: any): string {
+  if (question?.subject) return String(question.subject);
+  if (question?.kind === 'ranking' && Array.isArray(question.items)) {
+    return [...question.items].sort().join('|');
+  }
+  return String(question?.question ?? '').slice(0, 60);
 }
 
 export async function POST(req: Request) {
@@ -116,17 +95,18 @@ export async function POST(req: Request) {
           baseQueue.push({ game: g, category: pickOne<string>(room.config.categories) });
         }
       }
-      const queue = assignTriviaKinds(baseQueue);
+      const queue = assignTriviaMeta(baseQueue);
       const first = queue[0];
-      const question = await generateQuestion(
-        first.game as any,
-        first.category,
-        [],
-        [],
-        first.triviaKind ?? 'text',
-      );
+      const question = await generateQuestion(first.game as any, first.category, {
+        avoidSubjects: [],
+        avoidImageSubjects: [],
+        triviaKind: first.triviaKind ?? 'text',
+        subAngle: first.subAngle,
+        difficulty: first.difficulty,
+      });
 
-      const pastWikiSubjects = appendWikiTracker(question, []);
+      const subject = subjectOf(question);
+      const pastImageSubjects = question.wikiQuery ? [question.wikiQuery] : [];
 
       const state = {
         phase: 'answering',
@@ -137,8 +117,8 @@ export async function POST(req: Request) {
         question,
         answers: {},
         wallPicks: {},
-        pastQuestions: [question.question.slice(0, 80)],
-        pastWikiSubjects,
+        pastQuestions: [subject],
+        pastImageSubjects,
       };
       const { error } = await supabaseAdmin.from('rooms').update({ state }).eq('code', code);
       if (error) throw error;
@@ -232,16 +212,20 @@ export async function POST(req: Request) {
       }
 
       const entry = queue[nextIndex];
-      const prevWiki: string[] = state.pastWikiSubjects ?? [];
-      const question = await generateQuestion(
-        entry.game as any,
-        entry.category,
-        state.pastQuestions ?? [],
-        prevWiki,
-        entry.triviaKind ?? 'text',
-      );
+      const prevSubjects: string[] = state.pastQuestions ?? [];
+      const prevImageSubjects: string[] = state.pastImageSubjects ?? state.pastWikiSubjects ?? [];
+      const question = await generateQuestion(entry.game as any, entry.category, {
+        avoidSubjects: prevSubjects,
+        avoidImageSubjects: prevImageSubjects,
+        triviaKind: entry.triviaKind ?? 'text',
+        subAngle: entry.subAngle,
+        difficulty: entry.difficulty,
+      });
 
-      const nextWikiSubjects = appendWikiTracker(question, prevWiki);
+      const subject = subjectOf(question);
+      const nextImageSubjects = question.wikiQuery
+        ? [...prevImageSubjects, question.wikiQuery]
+        : prevImageSubjects;
 
       const newState = {
         ...state,
@@ -252,8 +236,8 @@ export async function POST(req: Request) {
         question,
         answers: {},
         wallPicks: {},
-        pastQuestions: [...(state.pastQuestions ?? []), question.question.slice(0, 80)],
-        pastWikiSubjects: nextWikiSubjects,
+        pastQuestions: [...prevSubjects, subject],
+        pastImageSubjects: nextImageSubjects,
       };
       const { error } = await supabaseAdmin.from('rooms').update({ state: newState }).eq('code', code);
       if (error) throw error;

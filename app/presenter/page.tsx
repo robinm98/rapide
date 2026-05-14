@@ -2,11 +2,11 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { Shell, Btn, Tag } from '@/components/ui';
 import { T, fontStack } from '@/lib/design';
+import { assignTriviaMeta, type TriviaKind, type Difficulty } from '@/lib/trivia-meta';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
 type GameType = 'trivia' | 'wall' | 'closest';
-type TriviaKind = 'text' | 'image' | 'ranking';
 
 interface Player {
   id: string;
@@ -18,10 +18,13 @@ interface RoundEntry {
   game: GameType;
   category: string;
   triviaKind?: TriviaKind;
+  subAngle?: string;
+  difficulty?: Difficulty;
 }
 
 interface Question {
   question: string;
+  subject?: string;
   imageFirst?: boolean;
   imageUrl?: string;
   choices?: string[];
@@ -70,60 +73,42 @@ function buildQueue(games: GameType[], categories: string[], roundsPerGame: numb
       entries.push({ game, category: pickOne(categories) });
     }
   }
-  // For each trivia round, pre-decide its kind: 25% image, 50% text, 25% ranking, at random indices.
-  const triviaIndices: number[] = [];
-  entries.forEach((e, i) => { if (e.game === 'trivia') triviaIndices.push(i); });
-  const total = triviaIndices.length;
-  if (total > 0) {
-    const imageCount = Math.round(total * 0.25);
-    const rankingCount = Math.round(total * 0.25);
-    const shuffled = triviaIndices
-      .map(i => ({ i, k: Math.random() }))
-      .sort((a, b) => a.k - b.k)
-      .map(o => o.i);
-    const imageSet = new Set(shuffled.slice(0, imageCount));
-    const rankingSet = new Set(shuffled.slice(imageCount, imageCount + rankingCount));
-    for (let i = 0; i < entries.length; i++) {
-      if (entries[i].game !== 'trivia') continue;
-      entries[i].triviaKind = imageSet.has(i) ? 'image' : rankingSet.has(i) ? 'ranking' : 'text';
-    }
-  }
-  return entries;
+  // Pre-assign trivia kind (15% image / 25% ranking / 60% text), sub-angle, and
+  // difficulty (30% easy / 50% medium / 20% hard) to every trivia round.
+  return assignTriviaMeta(entries);
 }
 
 // ─── Local storage helpers (persist across sessions) ─────────────────────────
 
-const RECENT_Q_KEY = 'salon_recent_questions';
-const RECENT_WIKI_KEY = 'salon_recent_wiki_subjects';
+const RECENT_SUBJECTS_KEY = 'salon_recent_questions';      // general subject stems, cap 200
+const RECENT_IMAGE_KEY = 'salon_recent_image_subjects';    // image-only subjects, cap 100
 
-function readRecentQuestions(): string[] {
+function readJsonList(key: string): string[] {
   try {
-    const raw = localStorage.getItem(RECENT_Q_KEY);
+    const raw = localStorage.getItem(key);
     return raw ? JSON.parse(raw) : [];
   } catch { return []; }
 }
 
-function appendRecentQuestion(q: string) {
+function appendJsonList(key: string, value: string, cap: number) {
+  if (!value) return;
   try {
-    const existing = readRecentQuestions();
-    const updated = [...new Set([...existing, q])].slice(-100);
-    localStorage.setItem(RECENT_Q_KEY, JSON.stringify(updated));
+    const existing = readJsonList(key);
+    const updated = [...new Set([...existing, value])].slice(-cap);
+    localStorage.setItem(key, JSON.stringify(updated));
   } catch {}
 }
 
-function readRecentWikiSubjects(): string[] {
-  try {
-    const raw = localStorage.getItem(RECENT_WIKI_KEY);
-    return raw ? JSON.parse(raw) : [];
-  } catch { return []; }
-}
+const readRecentSubjects = () => readJsonList(RECENT_SUBJECTS_KEY);
+const appendRecentSubject = (s: string) => appendJsonList(RECENT_SUBJECTS_KEY, s, 200);
+const readRecentImageSubjects = () => readJsonList(RECENT_IMAGE_KEY);
+const appendRecentImageSubject = (s: string) => appendJsonList(RECENT_IMAGE_KEY, s, 100);
 
-function appendRecentWikiSubject(subject: string) {
-  try {
-    const existing = readRecentWikiSubjects();
-    const updated = [...new Set([...existing, subject])].slice(-100);
-    localStorage.setItem(RECENT_WIKI_KEY, JSON.stringify(updated));
-  } catch {}
+// The general subject stem of a generated question, for the exclusion list.
+function subjectOf(q: any): string {
+  if (q?.subject) return String(q.subject);
+  if (q?.kind === 'ranking' && Array.isArray(q.items)) return [...q.items].sort().join('|');
+  return String(q?.question ?? '').slice(0, 60);
 }
 
 // ─── Sub-components ───────────────────────────────────────────────────────────
@@ -771,27 +756,26 @@ export default function PresenterPage() {
     setPhase('loading');
     setLoadError('');
     try {
-      const recent = readRecentQuestions();
-      const combined = [...new Set([...recent, ...past])].slice(-50);
-      const avoidWikiSubjects = readRecentWikiSubjects();
+      const recent = readRecentSubjects();
+      const avoidSubjects = [...new Set([...recent, ...past])];
+      const avoidImageSubjects = readRecentImageSubjects();
       const res = await fetch('/api/presenter-question', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           game: entry.game,
           category: entry.category,
-          previousQuestions: combined,
-          avoidWikiSubjects,
+          avoidSubjects,
+          avoidImageSubjects,
           triviaKind: entry.triviaKind ?? 'text',
+          subAngle: entry.subAngle,
+          difficulty: entry.difficulty,
         }),
       });
       const data = await res.json();
       if (data.error) throw new Error(data.error);
-      appendRecentQuestion(data.question.slice(0, 80));
-      if (data.wikiQuery) appendRecentWikiSubject(data.wikiQuery);
-      if (data.kind === 'ranking' && Array.isArray(data.items)) {
-        appendRecentWikiSubject([...data.items].sort().join('|'));
-      }
+      appendRecentSubject(subjectOf(data));
+      if (data.wikiQuery) appendRecentImageSubject(data.wikiQuery);
       setQuestion(data);
       setHighlighted(null);
       setPhase('displaying');
@@ -817,7 +801,7 @@ export default function PresenterPage() {
     setPlayers(newPlayers);
 
     const newPast = question
-      ? [...pastQuestions, question.question.slice(0, 80)]
+      ? [...pastQuestions, subjectOf(question)]
       : pastQuestions;
     setPastQuestions(newPast);
 
