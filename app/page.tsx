@@ -122,7 +122,7 @@ export default function Home() {
             </p>
           </div>
 
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', borderTop: `1px solid ${T.line}` }}>
+          <div className="home-cards-grid" style={{ borderTop: `1px solid ${T.line}` }}>
             {[
               { key: 'create', num: '01', title: 'Host a Room', desc: 'Create a game, share the 4-letter code with friends.', tag: 'Host', href: null },
               { key: 'join', num: '02', title: 'Join a Room', desc: 'Someone sent you a code? Enter it and hop in.', tag: 'Guest', href: null },

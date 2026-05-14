@@ -212,8 +212,12 @@ export default function RoomPage({ params }: { params: { code: string } }) {
   const everyoneAnswered = answerCount === room.players.length;
 
   return (
-    <Shell confirmLeave>
-      <main style={{ maxWidth: 1100, margin: '0 auto', padding: 'clamp(16px, 4vw, 32px)' }}>
+    <Shell confirmLeave fitViewport={state.phase === 'answering'}>
+      <main
+        className={state.phase === 'answering' ? 'game-screen' : undefined}
+        style={{ maxWidth: 1100, width: '100%', margin: '0 auto', padding: 'clamp(16px, 4vw, 32px)' }}
+      >
+        <div className="game-screen-header">
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 32, paddingBottom: 20, borderBottom: `1px solid ${T.lineFade}`, flexWrap: 'wrap', gap: 12 }}>
           <div style={{ fontFamily: fontStack.mono, fontSize: 11, color: T.inkMute, letterSpacing: '0.15em', textTransform: 'uppercase' }}>
             Round {(state.queueIndex ?? 0) + 1} / {state.queue?.length ?? config.rounds}
@@ -238,7 +242,9 @@ export default function RoomPage({ params }: { params: { code: string } }) {
             </div>
           ))}
         </div>
+        </div>
 
+        <div className="game-screen-main">
         <div className="fade-up" style={{ marginBottom: 40 }}>
           {/* Round mode banner */}
           <div style={{
@@ -264,7 +270,7 @@ export default function RoomPage({ params }: { params: { code: string } }) {
                 display: 'block',
                 marginBottom: 20,
                 maxWidth: isMobile ? '100%' : 480,
-                maxHeight: isMobile ? 240 : 320,
+                maxHeight: isMobile ? 240 : 'min(320px, 40vh)',
                 width: isMobile ? '100%' : 'auto',
                 height: 'auto',
                 objectFit: 'contain',
@@ -700,7 +706,9 @@ export default function RoomPage({ params }: { params: { code: string } }) {
             )}
           </>
         )}
+        </div>
 
+        <div className="game-screen-footer">
         {/* Footer controls */}
         <div style={{ marginTop: 40, paddingTop: 32, borderTop: `1px solid ${T.line}`, display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 16 }}>
           {state.phase === 'answering' && (
@@ -732,6 +740,7 @@ export default function RoomPage({ params }: { params: { code: string } }) {
               )}
             </>
           )}
+        </div>
         </div>
       </main>
     </Shell>

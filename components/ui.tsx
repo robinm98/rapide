@@ -76,9 +76,10 @@ type ShellProps = {
   showHome?: boolean;
   onHomeClick?: () => void;
   confirmLeave?: boolean;
+  fitViewport?: boolean;
 };
 
-export const Shell = ({ children, hideHeader, showHome, onHomeClick, confirmLeave }: ShellProps) => {
+export const Shell = ({ children, hideHeader, showHome, onHomeClick, confirmLeave, fitViewport }: ShellProps) => {
   const router = useRouter();
   const pathname = usePathname();
   const resolvedShowHome = showHome ?? (pathname !== '/');
@@ -91,7 +92,7 @@ export const Shell = ({ children, hideHeader, showHome, onHomeClick, confirmLeav
     else router.push('/');
   };
   return (
-    <div className="shell-root" style={{
+    <div className={`shell-root${fitViewport ? ' shell-fit' : ''}`} style={{
       display: 'flex',
       flexDirection: 'column',
       background: T.bg, color: T.ink,

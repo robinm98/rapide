@@ -297,7 +297,7 @@ function QuestionDisplay({
   isMobile: boolean;
 }) {
   return (
-    <div style={{
+    <div className="game-fit" style={{
       flex: 1,
       display: 'flex',
       flexDirection: 'column',
@@ -319,7 +319,7 @@ function QuestionDisplay({
       </div>
 
       {/* Centered content */}
-      <div style={{
+      <div className="game-fit" style={{
         flex: 1,
         display: 'flex',
         flexDirection: 'column',
@@ -853,14 +853,16 @@ export default function PresenterPage() {
   }
 
   return (
-    <Shell confirmLeave>
-      <div style={{
-        minHeight: '100dvh',
-        position: 'relative',
-        display: 'flex',
-        flexDirection: 'column',
-        flex: 1,
-      }}>
+    <Shell confirmLeave fitViewport={phase === 'displaying'}>
+      <div
+        className={phase === 'displaying' ? 'game-fit' : undefined}
+        style={{
+          position: 'relative',
+          display: 'flex',
+          flexDirection: 'column',
+          flex: 1,
+        }}
+      >
         {/* Quit confirm overlay */}
         {showQuit && (
           <div style={{
