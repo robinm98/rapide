@@ -26,6 +26,30 @@ body {
 @media (max-width: 767px) {
   .kbd-hint { display: none; }
 }
+
+/* Homepage mode cards: single column on mobile, three columns on laptop. */
+.home-cards-grid { display: grid; grid-template-columns: 1fr; }
+
+/* Laptop-only (>900px): pin gameplay question screens to the viewport so the
+   header and footer stay visible without scrolling. No-ops below 900px, so
+   mobile/tablet keep their natural scrolling behavior. */
+@media (min-width: 900px) {
+  .home-cards-grid { grid-template-columns: repeat(3, 1fr); }
+  .shell-fit { height: 100dvh; overflow: hidden; }
+  .game-fit { min-height: 0; overflow: hidden; }
+  .game-screen {
+    flex: 1; min-height: 0;
+    display: flex; flex-direction: column;
+    overflow: hidden;
+  }
+  .game-screen > .game-screen-header { flex-shrink: 0; }
+  .game-screen > .game-screen-main {
+    flex: 1; min-height: 0; overflow: hidden;
+    display: flex; flex-direction: column; justify-content: center;
+  }
+  .game-screen > .game-screen-footer { flex-shrink: 0; }
+}
+
 @keyframes fadeUp { from { opacity: 0; transform: translateY(12px); } to { opacity: 1; transform: translateY(0); } }
 @keyframes pulse { 0%, 100% { opacity: 0.4; } 50% { opacity: 1; } }
 .fade-up { animation: fadeUp 0.5s ease-out both; }
