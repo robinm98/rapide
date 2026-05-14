@@ -30,6 +30,7 @@ export default function RoomPage({ params }: { params: { code: string } }) {
   const [myWallPicks, setMyWallPicks] = useState<number[]>([]);
   const [closestInput, setClosestInput] = useState('');
   const [myRanks, setMyRanks] = useState<(number | null)[]>([null, null, null, null]);
+  const [selectedOption, setSelectedOption] = useState<number | null>(null);
   const [submitting, setSubmitting] = useState(false);
   const [skipping, setSkipping] = useState(false);
   const [skipError, setSkipError] = useState('');
@@ -67,6 +68,7 @@ export default function RoomPage({ params }: { params: { code: string } }) {
             setMyWallPicks([]);
             setClosestInput('');
             setMyRanks([null, null, null, null]);
+            setSelectedOption(null);
           }
         })
       .subscribe();
@@ -353,42 +355,66 @@ export default function RoomPage({ params }: { params: { code: string } }) {
 
         {/* TRIVIA — choice (text/image) */}
         {currentGame === 'trivia' && q.kind !== 'ranking' && (
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))', gap: 12 }}>
-            {q.choices.map((choice: string, idx: number) => {
-              const isCorrect = idx === q.correctIndex;
-              const myChoice = state.answers[playerId] === idx;
-              const pickedBy = room.players.filter(p => state.answers[p.id] === idx);
-              let bg = T.bg, color = T.ink, border = T.ink;
-              if (state.phase === 'revealing') {
-                if (isCorrect) { bg = T.correctBg; color = T.correct; border = T.correct; }
-                else if (pickedBy.length > 0) { bg = T.wrongBg; color = T.wrong; border = T.wrong; }
-              } else if (myChoice) { bg = T.ink; color = T.bg; border = T.ink; }
+          <>
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))', gap: 12 }}>
+              {q.choices.map((choice: string, idx: number) => {
+                const isCorrect = idx === q.correctIndex;
+                const myChoice = state.answers[playerId] === idx;
+                const pickedBy = room.players.filter(p => state.answers[p.id] === idx);
+                let bg = T.bg, color = T.ink, border = T.ink;
+                if (state.phase === 'revealing') {
+                  if (isCorrect) { bg = T.correctBg; color = T.correct; border = T.correct; }
+                  else if (pickedBy.length > 0) { bg = T.wrongBg; color = T.wrong; border = T.wrong; }
+                } else if (iAnswered) {
+                  // Locked in — keep the committed choice highlighted.
+                  if (myChoice) { bg = T.accent; color = '#FFF'; border = T.accent; }
+                } else if (selectedOption === idx) {
+                  // Pending selection — not yet committed.
+                  bg = T.accent; color = '#FFF'; border = T.accent;
+                }
 
-              const canClick = state.phase === 'answering' && !iAnswered;
-              return (
-                <button key={idx} disabled={!canClick} onClick={() => callAPI('answer', { answer: idx })} style={{
-                  padding: '24px 20px', textAlign: 'left', cursor: canClick ? 'pointer' : 'default',
-                  background: bg, color, border: `1.5px solid ${border}`,
-                  fontFamily: fontStack.body, fontSize: 17, lineHeight: 1.3,
-                  minHeight: isMobile ? 80 : undefined,
-                  display: 'flex', gap: 16, alignItems: 'flex-start',
-                }}>
-                  <span style={{ fontFamily: fontStack.mono, fontSize: 11, letterSpacing: '0.1em', opacity: 0.6, marginTop: 4, minWidth: 20 }}>
-                    {String.fromCharCode(65 + idx)}.
-                  </span>
-                  <span style={{ flex: 1 }}>{choice}</span>
-                  {state.phase === 'revealing' && pickedBy.length > 0 && (
-                    <span style={{ fontFamily: fontStack.mono, fontSize: 10, letterSpacing: '0.1em', textTransform: 'uppercase' }}>
-                      {pickedBy.map(p => p.name).join(', ')}
+                const canClick = state.phase === 'answering' && !iAnswered;
+                return (
+                  <button key={idx} disabled={!canClick} onClick={() => setSelectedOption(idx)} style={{
+                    padding: '24px 20px', textAlign: 'left', cursor: canClick ? 'pointer' : 'default',
+                    background: bg, color, border: `1.5px solid ${border}`,
+                    fontFamily: fontStack.body, fontSize: 17, lineHeight: 1.3,
+                    minHeight: isMobile ? 80 : undefined,
+                    display: 'flex', gap: 16, alignItems: 'flex-start',
+                    transition: 'all 0.15s',
+                  }}>
+                    <span style={{ fontFamily: fontStack.mono, fontSize: 11, letterSpacing: '0.1em', opacity: 0.6, marginTop: 4, minWidth: 20 }}>
+                      {String.fromCharCode(65 + idx)}.
                     </span>
-                  )}
-                  {state.phase === 'revealing' && isCorrect && (
-                    <span style={{ fontFamily: fontStack.mono, fontSize: 10, letterSpacing: '0.1em' }}>✓</span>
-                  )}
-                </button>
-              );
-            })}
-          </div>
+                    <span style={{ flex: 1 }}>{choice}</span>
+                    {state.phase === 'revealing' && pickedBy.length > 0 && (
+                      <span style={{ fontFamily: fontStack.mono, fontSize: 10, letterSpacing: '0.1em', textTransform: 'uppercase' }}>
+                        {pickedBy.map(p => p.name).join(', ')}
+                      </span>
+                    )}
+                    {state.phase === 'revealing' && isCorrect && (
+                      <span style={{ fontFamily: fontStack.mono, fontSize: 10, letterSpacing: '0.1em' }}>✓</span>
+                    )}
+                  </button>
+                );
+              })}
+            </div>
+            {state.phase === 'answering' && !iAnswered && (
+              <div style={{ marginTop: 20, display: 'flex', justifyContent: 'flex-end' }}>
+                <Btn
+                  onClick={() => { if (selectedOption !== null) callAPI('answer', { answer: selectedOption }); }}
+                  disabled={selectedOption === null || submitting}
+                >
+                  Lock in answer
+                </Btn>
+              </div>
+            )}
+            {state.phase === 'answering' && iAnswered && (
+              <div style={{ marginTop: 12, padding: 16, background: T.bgAlt, fontFamily: fontStack.mono, fontSize: 12, textAlign: 'center', color: T.inkSoft }}>
+                Your answer is locked in. Waiting for others…
+              </div>
+            )}
+          </>
         )}
 
         {/* TRIVIA — ranking */}
