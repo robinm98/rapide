@@ -48,6 +48,34 @@ export const Tag = ({ children, color = T.ink }: any) => (
   }}>{children}</span>
 );
 
+// Quiet host-only escape hatch shown on question screens. Discreet by design —
+// it must not compete with the primary Reveal action.
+export const SkipButton = ({ onClick, loading, style = {} }: { onClick: () => void; loading?: boolean; style?: React.CSSProperties }) => (
+  <button
+    onClick={onClick}
+    disabled={loading}
+    style={{
+      padding: '6px 12px',
+      border: `1px solid ${T.lineFade}`,
+      background: 'transparent',
+      borderRadius: 0,
+      cursor: loading ? 'default' : 'pointer',
+      fontFamily: fontStack.mono,
+      fontSize: 10,
+      letterSpacing: '0.15em',
+      textTransform: 'uppercase',
+      color: T.inkMute,
+      opacity: loading ? 0.5 : 1,
+      transition: 'color 0.15s',
+      ...style,
+    }}
+    onMouseEnter={e => { if (!loading) (e.currentTarget as HTMLElement).style.color = T.ink; }}
+    onMouseLeave={e => { (e.currentTarget as HTMLElement).style.color = T.inkMute; }}
+  >
+    {loading ? 'Skipping…' : 'Skip'}
+  </button>
+);
+
 const HomeButton = ({ onClick }: { onClick: () => void }) => (
   <button
     onClick={onClick}

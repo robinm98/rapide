@@ -119,6 +119,7 @@ export async function POST(req: Request) {
         wallPicks: {},
         pastQuestions: [subject],
         pastImageSubjects,
+        skipCount: 0,
       };
       const { error } = await supabaseAdmin.from('rooms').update({ state }).eq('code', code);
       if (error) throw error;
@@ -238,6 +239,58 @@ export async function POST(req: Request) {
         wallPicks: {},
         pastQuestions: [...prevSubjects, subject],
         pastImageSubjects: nextImageSubjects,
+      };
+      const { error } = await supabaseAdmin.from('rooms').update({ state: newState }).eq('code', code);
+      if (error) throw error;
+      return NextResponse.json({ ok: true });
+    }
+
+    if (action === 'skip') {
+      const { code, playerId } = body;
+      const { data: room } = await supabaseAdmin
+        .from('rooms').select('*').eq('code', code).maybeSingle();
+      if (!room) return NextResponse.json({ error: 'Room not found' }, { status: 404 });
+      if (room.host_id !== playerId) return NextResponse.json({ error: 'Only host can skip' }, { status: 403 });
+
+      const { state } = room;
+      if (state.phase !== 'answering') {
+        return NextResponse.json({ error: 'Can only skip during a question' }, { status: 400 });
+      }
+
+      const queue: QueueEntry[] = state.queue ?? [];
+      const idx = state.queueIndex ?? 0;
+      const entry = queue[idx];
+      if (!entry) return NextResponse.json({ error: 'No active round' }, { status: 400 });
+
+      // The skipped question's subject is already the last entry of pastQuestions
+      // (and pastImageSubjects, if it was an image question), so passing those as
+      // exclusion lists naturally prevents the dud from coming straight back.
+      const prevSubjects: string[] = state.pastQuestions ?? [];
+      const prevImageSubjects: string[] = state.pastImageSubjects ?? state.pastWikiSubjects ?? [];
+
+      // Regenerate for the SAME round with its pre-assigned properties — no re-randomization.
+      const question = await generateQuestion(entry.game as any, entry.category, {
+        avoidSubjects: prevSubjects,
+        avoidImageSubjects: prevImageSubjects,
+        triviaKind: entry.triviaKind ?? 'text',
+        subAngle: entry.subAngle,
+        difficulty: entry.difficulty,
+      });
+
+      const subject = subjectOf(question);
+      const nextImageSubjects = question.wikiQuery
+        ? [...prevImageSubjects, question.wikiQuery]
+        : prevImageSubjects;
+
+      const newState = {
+        ...state,
+        // phase, round and queueIndex are deliberately unchanged.
+        question,
+        answers: {},
+        wallPicks: {},
+        pastQuestions: [...prevSubjects, subject],
+        pastImageSubjects: nextImageSubjects,
+        skipCount: (state.skipCount ?? 0) + 1,
       };
       const { error } = await supabaseAdmin.from('rooms').update({ state: newState }).eq('code', code);
       if (error) throw error;
