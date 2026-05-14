@@ -1,105 +1,140 @@
 import Anthropic from '@anthropic-ai/sdk';
 import { fetchWikiImage } from '@/lib/wiki';
+import type { TriviaKind, Difficulty } from '@/lib/trivia-meta';
+
+export type { TriviaKind, Difficulty };
 
 const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
 
-export type TriviaKind = 'text' | 'image' | 'ranking';
+export type QuestionOpts = {
+  // General subject exclusion list — every question type contributes (cross-session).
+  avoidSubjects?: string[];
+  // Image-only subject exclusion list (narrower pool, tracked separately).
+  avoidImageSubjects?: string[];
+  triviaKind?: TriviaKind;
+  subAngle?: string;
+  difficulty?: Difficulty;
+};
 
-function buildAvoidQuestionsClause(previousQuestions: string[]) {
-  return previousQuestions.length
-    ? `\n\nDo not repeat any of these already-asked questions from this session: ${previousQuestions.slice(-15).join('; ')}`
-    : '';
+const DIFFICULTY_DEF: Record<Difficulty, string> = {
+  easy: 'EASY — a well-informed adult would get this right most of the time. Common knowledge with a slight twist.',
+  medium: 'MEDIUM — a curious generalist or trivia enthusiast would get this. Requires some specific knowledge but not specialist-level.',
+  hard: 'HARD — a specialist or very well-read person would get this. Requires deeper knowledge but NEVER PhD-level or obscure-fact knowledge. Challenging but fair, not "impossible without Wikipedia open".',
+};
+
+const TONE = `TONE: Aim for trivia that a curious generalist would find satisfying. Think bar-trivia-with-character, not pub-quiz-tedium. Avoid two failure modes:
+- Too obvious: "What is the capital of France?", "Who painted the Mona Lisa?", "What color is the sky?". These bore players.
+- Too obscure: "In what year did the Treaty of Nystad transfer Estonia to Russia?", "What is the IUPAC name for caffeine?". These frustrate players.
+Questions should make a player think "huh, I should know that" or "oh that's interesting" — never "no one would know that" or "too easy to ask."`;
+
+function avoidSubjectsClause(avoidSubjects?: string[]) {
+  if (!avoidSubjects || !avoidSubjects.length) return '';
+  return `\n\nEXCLUSION LIST — do not generate a question whose subject matter overlaps with anything here. Pick a genuinely different subject within the chosen sub-angle:\n${avoidSubjects.join('; ')}`;
 }
 
-function buildAvoidWikiClause(avoidWikiSubjects: string[]) {
-  return avoidWikiSubjects.length
-    ? `\n\nDo not pick a subject already used in this session: ${avoidWikiSubjects.slice(-30).join('; ')}.`
-    : '';
+function avoidImageSubjectsClause(avoidImageSubjects?: string[]) {
+  if (!avoidImageSubjects || !avoidImageSubjects.length) return '';
+  return `\n\nIMAGE EXCLUSION LIST — do not pick a wikiQuery that overlaps with anything here. Image questions have a narrower subject pool, so make a deliberate effort to pick a fresh subject:\n${avoidImageSubjects.join('; ')}`;
 }
 
-export function buildTriviaTextPrompt(category: string, previousQuestions: string[]) {
-  return `Generate ONE text-only trivia question from the broad category "${category}".
-- Vary the difficulty randomly (easy / medium / hard)
-- Be culturally diverse — not US-centric
-- This must be a text-only question: set "imageFirst": false and "wikiQuery": null.
+function triviaHeader(category: string, subAngle: string, difficulty: Difficulty) {
+  const angleLine = subAngle
+    ? `\nSUB-ANGLE: focus on "${subAngle}". The question should clearly be about this aspect of ${category}.`
+    : '';
+  return `You are generating a trivia question for a parlor game.
+
+${TONE}
+
+CATEGORY: ${category}${angleLine}
+
+DIFFICULTY: ${DIFFICULTY_DEF[difficulty]}
+
+Be culturally diverse — not US-centric.`;
+}
+
+export function buildTriviaTextPrompt(category: string, opts: QuestionOpts = {}) {
+  const subAngle = opts.subAngle ?? '';
+  const difficulty = opts.difficulty ?? 'medium';
+  return `${triviaHeader(category, subAngle, difficulty)}
+
+QUESTION TYPE: text-only multiple-choice. Set "imageFirst": false and "wikiQuery": null.
 
 Respond ONLY with valid JSON, no markdown, no preamble:
 {
   "imageFirst": false,
+  "subject": "2-5 word subject stem, e.g. 'battle of Hastings' or 'atomic number of gold'",
   "question": "string",
   "choices": ["A", "B", "C", "D"],
   "correctIndex": 0,
   "explanation": "1-2 sentence fun fact",
   "wikiQuery": null
-}${buildAvoidQuestionsClause(previousQuestions)}`;
+}${avoidSubjectsClause(opts.avoidSubjects)}`;
 }
 
-export function buildTriviaImagePrompt(
-  category: string,
-  previousQuestions: string[],
-  avoidWikiSubjects: string[],
-) {
-  return `Generate ONE image-first trivia question from the broad category "${category}".
-- Vary the difficulty randomly (easy / medium / hard)
-- Be culturally diverse — not US-centric
-- The image carries all the information; the question text MUST NOT name, describe, hint at, or paraphrase the subject.
-- The question text should be one of: "Who is this?", "Where is this?", "What is this?", "Which [country/painting/animal/dish] is this?", "Whose work is this?", "What is this landmark called?", "In which country is this located?"
-- Pick any subject likely to have a Wikipedia article OR a Wikimedia Commons image — people, places, landmarks, animals, artworks, objects, historical events, dishes, plants, vehicles, flags, logos, etc. Choose freely; well-known subjects are fine.
-- Set "wikiQuery" to the EXACT Wikipedia article title (or a Commons-friendly subject name) of what's pictured.
-- The four choices are the candidate answers.
+export function buildTriviaImagePrompt(category: string, opts: QuestionOpts = {}) {
+  const subAngle = opts.subAngle ?? '';
+  const difficulty = opts.difficulty ?? 'medium';
+  return `${triviaHeader(category, subAngle, difficulty)}
+
+QUESTION TYPE: image-first. An image of the subject will be shown to players; the question text MUST NOT name, describe, hint at, or paraphrase the subject.
+
+IMAGE-FRIENDLY SUBJECT: ${subAngle ? `within the sub-angle "${subAngle}", pick` : 'Pick'} a wikiQuery that is image-friendly. Image-friendly subjects include: people (historical figures, artists, scientists, athletes, performers), places (cities, landmarks, natural features, monuments), objects (artifacts, paintings, sculptures, inventions, vehicles), animals and plants, flags and maps.
+
+QUESTION-TYPE VARIETY — randomly pick ONE style for this image (do NOT always use identification):
+1. IDENTIFICATION (~40%): "Who is this?" / "What is this?" / "Where is this?"
+2. CONTEXT/YEAR (~20%): "In what decade was this built?" / "What year did this person win the Nobel Prize?"
+3. ATTRIBUTION (~20%): "Who painted this?" / "Who directed this film?" / "Who designed this?"
+4. LOCATION (~10%): "In what country is this located?" / "On what continent?"
+5. RELATED FACT (~10%): "What is this animal's primary diet?" / "What language is spoken here?"
+The image carries the visual ID; the question asks something the player can deduce or know once they recognize the subject. The question text still MUST NOT name the subject.
+
+Set "wikiQuery" to the EXACT Wikipedia article title (or a Commons-friendly subject name) of what's pictured. The four choices are the candidate answers.
 
 Respond ONLY with valid JSON, no markdown, no preamble:
 {
   "imageFirst": true,
-  "question": "Who is this?",
+  "subject": "2-5 word subject stem",
+  "question": "the question (must NOT name the subject)",
   "choices": ["A", "B", "C", "D"],
   "correctIndex": 0,
   "explanation": "1-2 sentence fun fact",
   "wikiQuery": "exact Wikipedia article title"
-}${buildAvoidQuestionsClause(previousQuestions)}${buildAvoidWikiClause(avoidWikiSubjects)}`;
+}${avoidSubjectsClause(opts.avoidSubjects)}${avoidImageSubjectsClause(opts.avoidImageSubjects)}`;
 }
 
-export function buildTriviaRankingPrompt(
-  category: string,
-  previousQuestions: string[],
-  avoidWikiSubjects: string[],
-) {
-  return `Generate ONE ranking trivia question from the broad category "${category}".
-- Vary the difficulty randomly (easy / medium / hard)
-- Be culturally diverse — not US-centric
-- A ranking question gives 4 items that the player must place in correct order.
+export function buildTriviaRankingPrompt(category: string, opts: QuestionOpts = {}) {
+  const subAngle = opts.subAngle ?? '';
+  const difficulty = opts.difficulty ?? 'medium';
+  return `${triviaHeader(category, subAngle, difficulty)}
+
+QUESTION TYPE: ranking. Give 4 items the player must place in correct order.
 
 Rules:
-- Pick exactly 4 items from a SINGLE comparable category (all films, all countries, all mountains, all athletes, all events, etc. — never mix kinds).
+- Pick exactly 4 items from a SINGLE comparable category (all films, all countries, all mountains, all athletes, all events — never mix kinds).
 - Pick a clear, OBJECTIVE ranking criterion: release year, population, height, distance, championship count, founding date, area, etc. Never subjective ("best", "most popular").
-- Phrase the question clearly, e.g. "Rank these countries by population, largest to smallest." or "Rank these films from oldest to newest."
-- The "items" array MUST be in the CORRECT ORDER according to the criterion (the server will shuffle them before showing the player).
+- Phrase the question clearly, e.g. "Rank these countries by population, largest to smallest."
+- The "items" array MUST be in the CORRECT ORDER according to the criterion (the server shuffles them before showing the player).
 - The correct order must be verifiable and unambiguous.
-- Vary subjects across rounds — don't always pick films or countries.
 
 Respond ONLY with valid JSON, no markdown, no preamble:
 {
   "kind": "ranking",
+  "subject": "2-5 word subject stem",
   "question": "Rank these films from oldest to newest",
   "items": ["item in correct rank 1", "item in correct rank 2", "item in correct rank 3", "item in correct rank 4"],
   "explanation": "1-2 sentence context, e.g. the actual years"
-}${buildAvoidQuestionsClause(previousQuestions)}${buildAvoidWikiClause(avoidWikiSubjects)}`;
+}${avoidSubjectsClause(opts.avoidSubjects)}`;
 }
 
-export function buildPrompt(
-  game: string,
-  category: string,
-  previousQuestions: string[],
-  avoidWikiSubjects: string[] = [],
-  triviaKind: TriviaKind = 'text',
-) {
+export function buildPrompt(game: string, category: string, opts: QuestionOpts = {}) {
   if (game === 'trivia') {
-    if (triviaKind === 'image') return buildTriviaImagePrompt(category, previousQuestions, avoidWikiSubjects);
-    if (triviaKind === 'ranking') return buildTriviaRankingPrompt(category, previousQuestions, avoidWikiSubjects);
-    return buildTriviaTextPrompt(category, previousQuestions);
+    const kind = opts.triviaKind ?? 'text';
+    if (kind === 'image') return buildTriviaImagePrompt(category, opts);
+    if (kind === 'ranking') return buildTriviaRankingPrompt(category, opts);
+    return buildTriviaTextPrompt(category, opts);
   }
 
-  const avoid = buildAvoidQuestionsClause(previousQuestions);
+  const avoid = avoidSubjectsClause(opts.avoidSubjects);
 
   if (game === 'wall') {
     return `Create ONE "wall" challenge for the broad category "${category}".
@@ -159,7 +194,6 @@ function shuffleRanking(data: any) {
     .sort((a, b) => a.k - b.k)
     .map(x => x.o);
   const newItems = shuffled.map(x => x.label);
-  // correctOrder[rank] = position in newItems of the item that belongs at that rank
   const correctOrder = indexed.map(({ originalIdx }) =>
     shuffled.findIndex(x => x.originalIdx === originalIdx),
   );
@@ -169,13 +203,9 @@ function shuffleRanking(data: any) {
 export async function generateQuestion(
   game: 'trivia' | 'wall' | 'closest',
   category: string,
-  previousQuestions: string[],
-  avoidWikiSubjects: string[] = [],
-  triviaKind: TriviaKind = 'text',
+  opts: QuestionOpts = {},
 ): Promise<any> {
-  const data = await callClaude(
-    buildPrompt(game, category, previousQuestions, avoidWikiSubjects, triviaKind),
-  );
+  const data = await callClaude(buildPrompt(game, category, opts));
 
   if (game === 'wall' && Array.isArray(data.items)) {
     data.items = data.items
@@ -184,18 +214,18 @@ export async function generateQuestion(
       .map((o: any) => o.v);
   }
 
-  if (game === 'trivia' && triviaKind === 'ranking') {
+  if (game === 'trivia' && opts.triviaKind === 'ranking') {
     return shuffleRanking(data);
   }
 
-  if (game === 'trivia' && triviaKind === 'image' && data.imageFirst && data.wikiQuery) {
+  if (game === 'trivia' && opts.triviaKind === 'image' && data.imageFirst && data.wikiQuery) {
     const imageUrl = await fetchWikiImage(data.wikiQuery);
     if (imageUrl) {
       data.imageUrl = imageUrl;
     } else {
-      // Both Wikipedia and Commons failed — fall back to a fresh text-only trivia question.
+      // Both Wikipedia and Commons failed — fall back to a fresh text-only question.
       try {
-        return await callClaude(buildTriviaTextPrompt(category, previousQuestions));
+        return await callClaude(buildTriviaTextPrompt(category, { ...opts, triviaKind: 'text' }));
       } catch {
         // keep the original payload but without an image
       }
