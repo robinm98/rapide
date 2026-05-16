@@ -307,7 +307,7 @@ function QuestionDisplay({
       padding: 'clamp(16px, 3vw, 32px) clamp(16px, 4vw, 48px)',
     }}>
       {/* Top banner */}
-      <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', position: 'relative' }}>
+      <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center' }}>
         <div style={{ display: 'flex', gap: 12, alignItems: 'center', flexWrap: 'wrap', justifyContent: 'center' }}>
           <span style={{ fontFamily: fontStack.mono, fontSize: 11, letterSpacing: '0.2em', textTransform: 'uppercase', color: T.inkMute }}>
             Round {round}/{total}
@@ -315,9 +315,6 @@ function QuestionDisplay({
           <Tag color={T.accent}>{GAMES.find(g => g.key === game)?.title}</Tag>
           {question.kind === 'ranking' && <Tag color={T.inkMute}>Ranking</Tag>}
           <Tag color={T.inkMute}>{category}</Tag>
-        </div>
-        <div style={{ position: 'absolute', right: 0 }}>
-          <SkipButton onClick={onSkip} />
         </div>
       </div>
 
@@ -409,7 +406,10 @@ function QuestionDisplay({
         display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 12,
         marginTop: 'auto',
       }}>
-        <Btn variant="ghost" onClick={onReveal}>Reveal →</Btn>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+          <SkipButton onClick={onSkip} />
+          <Btn variant="ghost" onClick={onReveal}>Reveal →</Btn>
+        </div>
         <div className="kbd-hint" style={{ ...mono(11, { color: T.inkMute }) }}>
           Space to reveal · 1–4 to highlight choices
         </div>
